@@ -56,7 +56,7 @@ func BenchmarkGetBalance(b *testing.B) {
 		LastUpdated: time.Now(),
 	}
 	data, _ := json.Marshal(bal)
-	mr.Set("balance:tenantA:client1:BRAZA:USDBRL", string(data))
+	_ = mr.Set("balance:tenantA:client1:BRAZA:USDBRL", string(data))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

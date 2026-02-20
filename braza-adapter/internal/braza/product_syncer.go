@@ -72,7 +72,7 @@ func (p *ProductSyncer) syncOnce(ctx context.Context, clientID, venue string, cr
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("braza product sync failed: %d", resp.StatusCode)

@@ -114,7 +114,7 @@ func (s *Service) FetchAndPublishBalances(
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("braza balances failed: %d", resp.StatusCode)
@@ -156,9 +156,9 @@ func (s *Service) FetchAndPublishBalances(
 		}
 
 		if err := pub.Publish(ctx, "evt.balance.update.v1", bal); err != nil {
-			//s.logger.Warn("publish_failed",
-			//	zap.String("instrument", bal.Instrument),
-			//	zap.Error(err))
+			s.logger.Warn("publish_failed",
+				zap.String("instrument", bal.Instrument),
+				zap.Error(err))
 		}
 	}
 
@@ -188,7 +188,7 @@ func (s *Service) CreateRFQ(
 
 	brazaReq := s.mapper.ToBrazaRFQ(req)
 	if s.productResolver.IsStale() {
-		s.syncOnce(ctx, req.ClientID, "BRAZA", creds)
+		_ = s.syncOnce(ctx, req.ClientID, "BRAZA", creds)
 	}
 
 	brazaReq.ProductID, err = s.productResolver.ResolveProductID(ctx, req.CurrencyPair)
@@ -211,12 +211,6 @@ func (s *Service) CreateRFQ(
 	httpReq.Header.Set("Accept", "application/json")
 
 	resp, err := s.client.Do(httpReq)
-	defer resp.Body.Close()
-	if resp.Body != nil {
-		s.logger.Info("received braza RFQ creation body",
-			zap.String("json", pretty(req)))
-	}
-
 	if err != nil {
 		var netErr net.Error
 		if errors.As(err, &netErr) && netErr.Timeout() {
@@ -235,6 +229,7 @@ func (s *Service) CreateRFQ(
 		)
 		return nil, fmt.Errorf("request_failed: %w", err)
 	}
+	defer resp.Body.Close() //nolint:errcheck
 
 	// --- Handle error responses gracefully ---
 	if resp.StatusCode != http.StatusCreated {
@@ -302,13 +297,11 @@ func (s *Service) ExecuteRFQ(ctx context.Context, clientID, quoteID string) (*Br
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := s.client.Do(req)
-	defer resp.Body.Close()
-	if resp.Body != nil {
-		s.logger.Info("received braza execute RFQ body",
-			zap.String("json", pretty(req)))
+	if err != nil {
+		return nil, fmt.Errorf("request_failed: %w", err)
 	}
-	defer resp.Body.Close()
-	if err != nil || resp.StatusCode != http.StatusCreated {
+	defer resp.Body.Close() //nolint:errcheck
+	if resp.StatusCode != http.StatusCreated {
 		var errBody map[string]any
 		_ = json.NewDecoder(resp.Body).Decode(&errBody)
 		detail := ""
@@ -379,7 +372,7 @@ func (s *Service) FetchTradeStatus(
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("braza returned %d for order %s", resp.StatusCode, orderID)
@@ -405,7 +398,7 @@ func (s *Service) ListProducts(ctx context.Context, clientID, venue string) ([]m
 			Password: credsMap.Password,
 		}
 
-		s.syncOnce(ctx, clientID, venue, creds)
+		_ = s.syncOnce(ctx, clientID, venue, creds)
 	}
 	return s.productResolver.ListProducts(venue)
 }
@@ -513,7 +506,7 @@ func (s *Service) syncOnce(ctx context.Context, clientID, venue string, creds au
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("braza product sync failed: %d", resp.StatusCode)
@@ -524,11 +517,7 @@ func (s *Service) syncOnce(ctx context.Context, clientID, venue string, creds au
 		return fmt.Errorf("decode error: %w", err)
 	}
 
-	products := make([]BrazaProductDef, 0, len(data.Results))
-	for _, product := range data.Results {
-		//p.logger.Info("product", zap.Any("product", product))
-		products = append(products, product)
-	}
+	products := append(make([]BrazaProductDef, 0, len(data.Results)), data.Results...)
 
 	s.productResolver.setProducts(products)
 

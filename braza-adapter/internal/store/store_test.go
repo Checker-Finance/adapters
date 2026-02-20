@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"testing"
 	"time"
@@ -106,11 +105,6 @@ func TestBalanceExpiration(t *testing.T) {
 	if res != nil {
 		t.Fatal("expected nil for expired key, got result")
 	}
-}
-
-func mustJSON(v any) []byte {
-	b, _ := json.Marshal(v)
-	return b
 }
 
 func TestConcurrentBalanceWrites(t *testing.T) {

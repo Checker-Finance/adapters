@@ -97,7 +97,7 @@ func (c *Client) doJSON(ctx context.Context, req *http.Request, out any) error {
 			time.Sleep(backoff(attempt))
 			continue
 		}
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck
 
 		body, _ := io.ReadAll(resp.Body)
 		elapsed := time.Since(start)

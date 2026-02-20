@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -18,7 +17,6 @@ type BrazaManager struct {
 	logger   *zap.Logger
 	baseURL  string
 	client   *http.Client
-	tokenMux sync.Mutex
 }
 
 // NewBrazaManager creates a new Braza-specific auth manager for the given base URL.
@@ -40,7 +38,7 @@ func (m *BrazaManager) GetValidToken(
 	key := fmt.Sprintf("braza:token:%s:", clientID)
 
 	// 1. Attempt to reuse cached token if valid
-	val, err := cache.Get(ctx, key)
+	val, _ := cache.Get(ctx, key)
 	if val != "" {
 		var tb TokenBundle
 		if err := json.Unmarshal([]byte(val), &tb); err == nil {
@@ -86,7 +84,7 @@ func (m *BrazaManager) login(ctx context.Context, creds Credentials) (TokenBundl
 	if err != nil {
 		return TokenBundle{}, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		return TokenBundle{}, fmt.Errorf("braza login failed: %d", resp.StatusCode)
@@ -123,7 +121,7 @@ func (m *BrazaManager) refresh(ctx context.Context, refreshToken string) (TokenB
 	if err != nil {
 		return TokenBundle{}, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		return TokenBundle{}, fmt.Errorf("braza refresh failed: %d", resp.StatusCode)
@@ -145,5 +143,5 @@ func (m *BrazaManager) refresh(ctx context.Context, refreshToken string) (TokenB
 // saveToken stores a token bundle into cache.
 func (m *BrazaManager) saveToken(ctx context.Context, cache *CacheAdapter, key string, tb TokenBundle) {
 	b, _ := json.Marshal(tb)
-	cache.SetWithTTL(ctx, key, string(b), time.Until(time.Unix(tb.Exp, 0)))
+	_ = cache.SetWithTTL(ctx, key, string(b), time.Until(time.Unix(tb.Exp, 0)))
 }

@@ -141,10 +141,6 @@ func (r *ProductResolver) ListProducts(venue string) ([]model.Product, error) {
 	return snapshot, nil
 }
 
-func cacheKeyFromProduct(product model.Product) string {
-	return NormalizePairForBraza(product.InstrumentSymbol) + "|" + product.ProductName
-}
-
 func cacheKey(par, nome string) string {
 	return strings.ToUpper(par) + "|" + strings.ToUpper(nome)
 }

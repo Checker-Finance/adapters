@@ -94,9 +94,3 @@ const rfqQuery = `
 		RETURNING s_id_request_for_quote;
 	`
 
-const quoteQuery = `
-		UPDATE activity.t_quote
-		SET s_status = 'EXPIRED'
-		WHERE UPPER(s_status) = 'OPEN'
-			AND dt_expiry < NOW() AND UPPER(s_provider) = 'BRAZA'
-		`

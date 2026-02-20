@@ -120,6 +120,6 @@ func SetLastPoll(component string, t time.Time) {
 func StartServer(addr string) {
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
-		http.ListenAndServe(addr, nil)
+		http.ListenAndServe(addr, nil) //nolint:errcheck
 	}()
 }
