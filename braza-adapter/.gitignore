@@ -3,7 +3,7 @@
 .vscode
 /secrets/
 bin/
-braza-adapter
+/braza-adapter
 .env
 .cursor
 .cursor/*
