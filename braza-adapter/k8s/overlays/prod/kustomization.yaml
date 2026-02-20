@@ -1,0 +1,69 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: braza-adapter-prod
+
+resources:
+  - ../../base
+  - secretstore.yaml
+  - externalsecret.yaml
+  - hpa.yaml
+
+namePrefix: prod-
+
+images:
+  - name: braza-adapter
+    newName: 730335471935.dkr.ecr.us-east-2.amazonaws.com/braza-adapter
+    newTag: SET_BY_CI
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: braza-adapter-prod
+    target:
+      kind: Namespace
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/priorityClassName
+        value: system-cluster-critical
+    target:
+      kind: Deployment
+      name: braza-adapter
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: "1"
+            memory: 512Mi
+    target:
+      kind: Deployment
+      name: braza-adapter
+  - target:
+      kind: ConfigMap
+      name: braza-adapter-config
+    patch: |-
+      - op: replace
+        path: /data/ENV
+        value: prod
+      - op: replace
+        path: /data/LOG_LEVEL
+        value: info
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/external-dns.alpha.kubernetes.io~1hostname
+        value: braza.checker.finance.
+    target:
+      kind: Ingress
+      name: braza-adapter
+  - patch: |-
+      - op: replace
+        path: /spec/scaleTargetRef/name
+        value: prod-braza-adapter
+    target:
+      kind: HorizontalPodAutoscaler
+      name: braza-adapter

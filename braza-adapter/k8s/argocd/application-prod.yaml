@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: braza-adapter-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Checker-Finance/adapters.git
+    targetRevision: main
+    path: braza-adapter/k8s/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: braza-adapter-prod
+  syncPolicy:
+    # Manual sync for production
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

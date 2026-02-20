@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: braza-adapter-config
+  namespace: braza-adapter
+data:
+  SERVICE_NAME: "braza-adapter"
+  ENV: "base"
+  LOG_LEVEL: "info"
+  BRAZA_PORT: "9020"

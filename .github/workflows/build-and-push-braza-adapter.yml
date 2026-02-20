@@ -1,14 +1,14 @@
-name: Build and Push Rio Adapter to ECR
+name: Build and Push Braza Adapter to ECR
 
 on:
   push:
     branches: [ main ]
     paths:
-      - 'rio-adapter/**'
+      - 'braza-adapter/**'
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: ${{ secrets.ECR_REPOSITORY }}
+  IMAGE_NAME: ${{ secrets.ECR_REPOSITORY_BRAZA }}
   REGION: ${{ secrets.AWS_REGION }}
   ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
 
@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: rio-adapter
+        working-directory: braza-adapter
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -28,7 +28,7 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: latest
-          working-directory: rio-adapter
+          working-directory: braza-adapter
           args: --timeout=5m
 
   build-and-push:
@@ -56,10 +56,10 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -f rio-adapter/Dockerfile \
+            -f braza-adapter/Dockerfile \
             -t $ECR_REGISTRY/$IMAGE_NAME:${{ steps.commit.outputs.sha }} \
             -t $ECR_REGISTRY/$IMAGE_NAME:latest \
-            rio-adapter
+            braza-adapter
 
       - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@master
@@ -77,4 +77,4 @@ jobs:
       - name: Notify on failure
         if: failure()
         run: |
-          echo "::error::Build or push failed for rio-adapter at commit ${{ steps.commit.outputs.sha }}"
+          echo "::error::Build or push failed for braza-adapter at commit ${{ steps.commit.outputs.sha }}"
