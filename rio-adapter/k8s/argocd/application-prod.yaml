@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rio-adapter-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Checker-Finance/adapters.git
+    targetRevision: main
+    path: rio-adapter/k8s/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: rio-adapter-prod
+  syncPolicy:
+    # Manual sync for production — automated sync is intentionally disabled.
+    # Deploy via: argocd app sync rio-adapter-prod
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

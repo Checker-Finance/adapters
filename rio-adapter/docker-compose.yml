@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+  rio-adapter:
+    container_name: rio-adapter
+    image: 730335471935.dkr.ecr.us-east-2.amazonaws.com/rio-adapter:latest
+    restart: always
+    env_file:
+      - .env
+    environment:
+      SERVICE_NAME: "rio-adapter"
+      REDIS_ADDR: "redis-stack:6379"
+      REDIS_DB: 0
+      NATS_URL: "nats://nats:4222"
+      AWS_REGION: "us-east-2"
+      HEALTH_ADDR: ":9011"
+    ports:
+      - "9011:9011"
+    depends_on:
+      - nats
+    networks:
+      - checker_app-network
+  nats:
+    image: nats:2.10-alpine
+    container_name: nats
+    restart: always
+    command: [
+      "-js",
+      "-sd", "/data/jetstream",
+      "-m", "8222"
+    ]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - natsdata:/data/jetstream
+    networks:
+      - checker_app-network
+  redis:
+    image: redis/redis-stack:7.4.0-v3
+    container_name: redis-stack
+    restart: always
+    ports:
+      - "6379:6379"
+      - "8001:8001"
+    volumes:
+      - redisdata:/data
+    networks:
+      - checker_app-network
+
+networks:
+  checker_app-network:
+    external:
+      name: checker_app-network
+
+volumes:
+  natsdata:
+  redisdata:

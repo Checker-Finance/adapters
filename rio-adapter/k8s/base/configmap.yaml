@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rio-adapter-config
+  namespace: rio-adapter
+data:
+  SERVICE_NAME: "rio-adapter"
+  ENV: "base"  # Override per environment via kustomize patches (dev/prod)
+  LOG_LEVEL: "info"
+  RIO_PORT: "9010"
+  POLL_INTERVAL: "5m"
+  RIO_POLL_INTERVAL: "30s"
+  RIO_COUNTRY: "US"
+  CACHE_TTL: "24h"
+  CACHE_CLEANUP_FREQ: "10m"
+  PRODUCT_SYNC_INTERVAL: "1h"
+  PRODUCT_TABLE: "reference.venue_products"
+  SETTLEMENT_CUT_OFF: "17:00"
+  INBOUND_SUBJECT: "cmd.lp.quote_request.v1.RIO"
+  OUTBOUND_SUBJECT: "evt.lp.quote_response.v1.RIO"
+  REDIS_DB: "0"

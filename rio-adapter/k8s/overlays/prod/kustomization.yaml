@@ -1,0 +1,72 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: rio-adapter-prod
+
+resources:
+  - ../../base
+  - secretstore.yaml
+  - externalsecret.yaml
+  - hpa.yaml
+
+namePrefix: prod-
+
+images:
+  - name: rio-adapter
+    newName: 730335471935.dkr.ecr.us-east-2.amazonaws.com/rio-adapter
+    newTag: SET_BY_CI  # Replaced by CI with git commit SHA; never use 'latest' in prod
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: rio-adapter-prod
+    target:
+      kind: Namespace
+  # Replica count managed by HPA — do not set static replicas
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/priorityClassName
+        value: system-cluster-critical
+    target:
+      kind: Deployment
+      name: rio-adapter
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: "1"
+            memory: 512Mi
+    target:
+      kind: Deployment
+      name: rio-adapter
+  - target:
+      kind: ConfigMap
+      name: rio-adapter-config
+    patch: |-
+      - op: replace
+        path: /data/ENV
+        value: prod
+      - op: replace
+        path: /data/LOG_LEVEL
+        value: info
+      - op: add
+        path: /data/RIO_BASE_URL
+        value: https://app.rio.trade
+      - op: add
+        path: /data/RIO_API_KEY_SECRET
+        value: rio/prod/api-key
+      - op: add
+        path: /data/AWS_REGION
+        value: us-east-2
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/external-dns.alpha.kubernetes.io~1hostname
+        value: rio.checker.finance.
+    target:
+      kind: Ingress
+      name: rio-adapter
