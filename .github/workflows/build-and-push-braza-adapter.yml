@@ -23,6 +23,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+          cache-dependency-path: braza-adapter/go.sum
       - run: go test -race -count=1 ./...
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7
