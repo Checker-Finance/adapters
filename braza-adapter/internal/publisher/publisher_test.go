@@ -16,6 +16,7 @@ import (
 // --- mock types ---
 
 type mockJetStream struct {
+	nats.JetStreamContext
 	published []*nats.Msg
 	fail      bool
 }
@@ -25,7 +26,7 @@ func (m *mockJetStream) PublishMsg(msg *nats.Msg, opts ...nats.PubOpt) (*nats.Pu
 		return nil, errors.New("mock publish error")
 	}
 	m.published = append(m.published, msg)
-	return &nats.PubAck{Stream: "mock-stream", Seq: 1}, nil
+	return &nats.PubAck{Stream: "mock-stream", Sequence: 1}, nil
 }
 
 // --- helper ---
@@ -103,13 +104,12 @@ func TestPublishEnvelope_Failure(t *testing.T) {
 func TestPublishBalanceUpdated(t *testing.T) {
 	pub := newTestPublisher(false)
 	bal := model.Balance{
-		ID:                  uuid.New(),
-		Venue:               "BRAZA",
-		Instrument:          "USDBRL",
-		AvailableTotalValue: 59992,
-		CanBuy:              true,
-		CanSell:             true,
-		LastUpdated:         time.Now(),
+		Venue:       "BRAZA",
+		Instrument:  "USDBRL",
+		Available:   59992,
+		CanBuy:      true,
+		CanSell:     true,
+		LastUpdated: time.Now(),
 	}
 
 	err := pub.PublishBalanceUpdated(context.Background(), bal, "tenant-1", "client-1")

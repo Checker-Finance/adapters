@@ -14,10 +14,12 @@ import (
 
 // --- mockJetStream for benchmarks (non-blocking, no error) ---
 
-type benchJetStream struct{}
+type benchJetStream struct {
+	nats.JetStreamContext
+}
 
 func (b *benchJetStream) PublishMsg(msg *nats.Msg, opts ...nats.PubOpt) (*nats.PubAck, error) {
-	return &nats.PubAck{Stream: "mock-stream", Seq: 1}, nil
+	return &nats.PubAck{Stream: "mock-stream", Sequence: 1}, nil
 }
 
 // --- setup helper ---
@@ -61,13 +63,12 @@ func BenchmarkPublishBalanceUpdated(b *testing.B) {
 	pub := newBenchPublisher()
 
 	bal := model.Balance{
-		ID:                  uuid.New(),
-		Venue:               "BRAZA",
-		Instrument:          "USDBRL",
-		AvailableTotalValue: 59992,
-		CanBuy:              true,
-		CanSell:             true,
-		LastUpdated:         time.Now(),
+		Venue:       "BRAZA",
+		Instrument:  "USDBRL",
+		Available:   59992,
+		CanBuy:      true,
+		CanSell:     true,
+		LastUpdated: time.Now(),
 	}
 
 	b.ResetTimer()

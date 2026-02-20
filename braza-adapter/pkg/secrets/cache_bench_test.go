@@ -16,7 +16,7 @@ func BenchmarkCacheGetPut(b *testing.B) {
 	// Pre-fill some entries to create partial hit ratios
 	for i := 0; i < 1000; i++ {
 		key := keyPrefix + strconv.Itoa(i)
-		cache.Put(key, Creds{"api_key": "key-" + strconv.Itoa(i)})
+		cache.Put(key, Credentials{Username: "key-" + strconv.Itoa(i)})
 	}
 
 	b.Run("sequential_hits", func(b *testing.B) {

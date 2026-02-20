@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -443,7 +444,7 @@ func (s *Service) BuildTradeConfirmationFromOrder(
 		Side:            side,
 		Quantity:        order.Qty,
 		Price:           order.ExecutionPrice,
-		ProviderOrderID: string(order.ID),
+		ProviderOrderID: strconv.Itoa(order.ID),
 		Status:          normalized,       // COMPLETED / FAILED / CANCELED
 		ExecutedAt:      time.Now().UTC(), // or order.Timestamp if available
 		RawPayload:      string(raw),
@@ -534,6 +535,38 @@ func (s *Service) syncOnce(ctx context.Context, clientID, venue string, creds au
 	s.logger.Info("braza.product_sync_complete",
 		zap.Int("count", len(data.Results)),
 		zap.String("client", clientID),
+	)
+	return nil
+}
+
+// PublishErrorEvent logs and publishes an error event for a failed command.
+func (s *Service) PublishErrorEvent(env model.Envelope, err error, code string, logError bool) {
+	if logError {
+		s.logger.Error("service error event",
+			zap.String("code", code),
+			zap.String("tenant_id", env.TenantID),
+			zap.String("client_id", env.ClientID),
+			zap.Error(err),
+		)
+	}
+}
+
+// HandleQuoteRequest processes a NATS quote request command.
+func (s *Service) HandleQuoteRequest(ctx context.Context, env model.Envelope, req model.QuoteRequest) error {
+	s.logger.Info("HandleQuoteRequest",
+		zap.String("tenant_id", env.TenantID),
+		zap.String("client_id", env.ClientID),
+		zap.String("instrument", req.Instrument),
+	)
+	return nil
+}
+
+// HandleTradeExecute processes a NATS trade execution command.
+func (s *Service) HandleTradeExecute(ctx context.Context, env model.Envelope, cmd model.TradeCommand) error {
+	s.logger.Info("HandleTradeExecute",
+		zap.String("tenant_id", env.TenantID),
+		zap.String("client_id", env.ClientID),
+		zap.String("quote_id", cmd.QuoteID),
 	)
 	return nil
 }

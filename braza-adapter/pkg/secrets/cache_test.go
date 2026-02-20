@@ -6,11 +6,11 @@ import (
 	"time"
 )
 
-// helper: creates a sample Creds map
-func sampleCreds() Creds {
-	return Creds{
-		"api_key":    "abc123",
-		"api_secret": "def456",
+// helper: creates a sample Credentials value
+func sampleCreds() Credentials {
+	return Credentials{
+		Username: "abc123",
+		Password: "def456",
 	}
 }
 
@@ -28,8 +28,8 @@ func TestCache_PutAndGet(t *testing.T) {
 	// immediate hit
 	if creds, ok := cache.Get(key); !ok {
 		t.Fatal("expected cache hit")
-	} else if creds["api_key"] != "abc123" {
-		t.Errorf("expected api_key=abc123, got %s", creds["api_key"])
+	} else if creds.Username != "abc123" {
+		t.Errorf("expected username=abc123, got %s", creds.Username)
 	}
 }
 
