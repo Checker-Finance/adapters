@@ -55,7 +55,7 @@ func (e *EventBus) SubscribeFunc(handler interface{}) {
 			handlerValue.Call([]reflect.Value{eventValue})
 		} else if eventValue.Type().Kind() == reflect.Ptr && eventValue.Elem().Type().AssignableTo(eventType) {
 			handlerValue.Call([]reflect.Value{eventValue.Elem()})
-		} else if eventType.Kind() == reflect.Ptr && reflect.PtrTo(eventValue.Type()).AssignableTo(eventType) {
+		} else if eventType.Kind() == reflect.Ptr && reflect.PointerTo(eventValue.Type()).AssignableTo(eventType) {
 			ptr := reflect.New(eventValue.Type())
 			ptr.Elem().Set(eventValue)
 			handlerValue.Call([]reflect.Value{ptr})
@@ -91,7 +91,7 @@ func (e *EventBus) Publish(event interface{}) {
 
 	// If event is not a pointer, also try the pointer type
 	if eventType.Kind() != reflect.Ptr {
-		ptrType := reflect.PtrTo(eventType)
+		ptrType := reflect.PointerTo(eventType)
 		if handlers, ok := e.handlers[ptrType]; ok {
 			ptr := reflect.New(eventType)
 			ptr.Elem().Set(reflect.ValueOf(event))
