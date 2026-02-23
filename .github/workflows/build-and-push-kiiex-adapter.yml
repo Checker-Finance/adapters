@@ -1,0 +1,81 @@
+name: Build and Push Kiiex Adapter to ECR
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'kiiex-adapter/**'
+      - 'pkg/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ${{ secrets.ECR_REPOSITORY_KIIEX }}
+  REGION: ${{ secrets.AWS_REGION }}
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: go.sum
+      - run: go test -race -count=1 ./kiiex-adapter/...
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: latest
+          args: --timeout=5m
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set region ${{ secrets.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Extract Git commit SHA
+        id: commit
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f kiiex-adapter/Dockerfile \
+            -t $ECR_REGISTRY/$IMAGE_NAME:${{ steps.commit.outputs.sha }} \
+            -t $ECR_REGISTRY/$IMAGE_NAME:latest \
+            .
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.commit.outputs.sha }}
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Push Docker images to ECR
+        run: |
+          docker push $ECR_REGISTRY/$IMAGE_NAME:${{ steps.commit.outputs.sha }}
+          docker push $ECR_REGISTRY/$IMAGE_NAME:latest
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Build or push failed for kiiex-adapter at commit ${{ steps.commit.outputs.sha }}"
