@@ -50,6 +50,11 @@ jobs:
       - name: Log in to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Ensure ECR repository exists
+        run: |
+          aws ecr describe-repositories --repository-names $IMAGE_NAME --region $REGION 2>/dev/null || \
+          aws ecr create-repository --repository-name $IMAGE_NAME --region $REGION
+
       - name: Extract Git commit SHA
         id: commit
         run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
