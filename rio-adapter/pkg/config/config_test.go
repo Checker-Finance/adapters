@@ -3,6 +3,8 @@ package config
 import (
 	"testing"
 	"time"
+
+	pkgconfig "github.com/Checker-Finance/adapters/pkg/config"
 )
 
 func TestLoad_Defaults(t *testing.T) {
@@ -128,7 +130,7 @@ func TestLoad_EnvOverrides(t *testing.T) {
 
 func TestGetEnv_Fallback(t *testing.T) {
 	t.Setenv("NONEXISTENT_KEY_12345", "")
-	val := getEnv("NONEXISTENT_KEY_12345", "fallback")
+	val := pkgconfig.GetEnv("NONEXISTENT_KEY_12345", "fallback")
 	if val != "fallback" {
 		t.Errorf("expected fallback, got %s", val)
 	}
@@ -136,7 +138,7 @@ func TestGetEnv_Fallback(t *testing.T) {
 
 func TestGetEnv_Set(t *testing.T) {
 	t.Setenv("TEST_KEY_ABC", "value123")
-	val := getEnv("TEST_KEY_ABC", "fallback")
+	val := pkgconfig.GetEnv("TEST_KEY_ABC", "fallback")
 	if val != "value123" {
 		t.Errorf("expected value123, got %s", val)
 	}
@@ -144,7 +146,7 @@ func TestGetEnv_Set(t *testing.T) {
 
 func TestGetEnvInt_InvalidFallsToDefault(t *testing.T) {
 	t.Setenv("BAD_INT", "not-a-number")
-	val := getEnvInt("BAD_INT", 42)
+	val := pkgconfig.GetEnvInt("BAD_INT", 42)
 	if val != 42 {
 		t.Errorf("expected default 42 for invalid int, got %d", val)
 	}
@@ -152,7 +154,7 @@ func TestGetEnvInt_InvalidFallsToDefault(t *testing.T) {
 
 func TestGetEnvDuration_InvalidFallsToDefault(t *testing.T) {
 	t.Setenv("BAD_DURATION", "not-a-duration")
-	val := getEnvDuration("BAD_DURATION", 5*time.Second)
+	val := pkgconfig.GetEnvDuration("BAD_DURATION", 5*time.Second)
 	if val != 5*time.Second {
 		t.Errorf("expected default 5s for invalid duration, got %v", val)
 	}
@@ -160,7 +162,7 @@ func TestGetEnvDuration_InvalidFallsToDefault(t *testing.T) {
 
 func TestGetEnvTime_ValidTime(t *testing.T) {
 	t.Setenv("CUT_OFF", "14:30")
-	val := getEnvTime("CUT_OFF", "17:00")
+	val := pkgconfig.GetEnvTime("CUT_OFF", "17:00")
 	if val.Hour() != 14 || val.Minute() != 30 {
 		t.Errorf("expected 14:30, got %02d:%02d", val.Hour(), val.Minute())
 	}
@@ -168,7 +170,7 @@ func TestGetEnvTime_ValidTime(t *testing.T) {
 
 func TestGetEnvTime_InvalidFallsToDefault(t *testing.T) {
 	t.Setenv("CUT_OFF_BAD", "invalid")
-	val := getEnvTime("CUT_OFF_BAD", "17:00")
+	val := pkgconfig.GetEnvTime("CUT_OFF_BAD", "17:00")
 	if val.Hour() != 17 || val.Minute() != 0 {
 		t.Errorf("expected 17:00 default, got %02d:%02d", val.Hour(), val.Minute())
 	}
@@ -176,7 +178,7 @@ func TestGetEnvTime_InvalidFallsToDefault(t *testing.T) {
 
 func TestGetEnvTime_Unset(t *testing.T) {
 	t.Setenv("CUT_OFF_UNSET", "")
-	val := getEnvTime("CUT_OFF_UNSET", "09:15")
+	val := pkgconfig.GetEnvTime("CUT_OFF_UNSET", "09:15")
 	if val.Hour() != 9 || val.Minute() != 15 {
 		t.Errorf("expected 09:15 default, got %02d:%02d", val.Hour(), val.Minute())
 	}

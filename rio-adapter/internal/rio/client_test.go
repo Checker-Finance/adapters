@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	"github.com/Checker-Finance/adapters/internal/httpclient"
 )
 
 // testClientConfig returns a RioClientConfig pointing at the given server URL.
@@ -228,8 +230,8 @@ func TestClient_ServerError_Retry(t *testing.T) {
 }
 
 func TestBackoff(t *testing.T) {
-	assert.Equal(t, 100*1e6, float64(backoff(0)))  // 100ms
-	assert.Equal(t, 250*1e6, float64(backoff(1)))  // 250ms
-	assert.Equal(t, 500*1e6, float64(backoff(2)))  // 500ms
-	assert.Equal(t, 500*1e6, float64(backoff(10))) // 500ms (max)
+	assert.Equal(t, 100*1e6, float64(httpclient.Backoff(0)))  // 100ms
+	assert.Equal(t, 250*1e6, float64(httpclient.Backoff(1)))  // 250ms
+	assert.Equal(t, 500*1e6, float64(httpclient.Backoff(2)))  // 500ms
+	assert.Equal(t, 500*1e6, float64(httpclient.Backoff(10))) // 500ms (max)
 }

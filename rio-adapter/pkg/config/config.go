@@ -1,11 +1,11 @@
 package config
 
 import (
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/joho/godotenv"
+
+	pkgconfig "github.com/Checker-Finance/adapters/pkg/config"
 )
 
 // Config holds the core runtime configuration for a service instance.
@@ -60,82 +60,42 @@ func Load() *Config {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		ServiceName:         getEnv("SERVICE_NAME", "rio-adapter"),
+		ServiceName:         pkgconfig.GetEnv("SERVICE_NAME", "rio-adapter"),
 		Venue:               "rio",
-		Env:                 getEnv("ENV", "dev"),
-		DatabaseURL:         getEnv("DATABASE_URL", "postgres://checker:checker@localhost/db_checker?sslmode=disable"),
-		PollInterval:        getEnvDuration("POLL_INTERVAL", 5*time.Minute),
-		NATSURL:             getEnv("NATS_URL", "nats://localhost:4222"),
-		RedisAddr:           getEnv("REDIS_ADDR", "localhost:6379"),
-		RedisDB:             getEnvInt("REDIS_DB", 0),
-		RedisPass:           getEnv("REDIS_PASS", ""),
-		AWSRegion:           getEnv("AWS_REGION", "us-east-2"),
-		LogLevel:            getEnv("LOG_LEVEL", "info"),
-		Port:                getEnvInt("RIO_PORT", 9010),
-		HTTPReadTimeout:     getEnvDuration("HTTP_READ_TIMEOUT", 10*time.Second),
-		HTTPWriteTimeout:    getEnvDuration("HTTP_WRITE_TIMEOUT", 10*time.Second),
-		HTTPIdleTimeout:     getEnvDuration("HTTP_IDLE_TIMEOUT", 60*time.Second),
-		HTTPBodyLimit:       getEnvInt("HTTP_BODY_LIMIT", 1*1024*1024),
-		CacheTTL:            getEnvDuration("CACHE_TTL", 24*time.Hour),
-		CleanupFreq:         getEnvDuration("CACHE_CLEANUP_FREQ", 10*time.Minute),
-		InboundSubject:      getEnv("INBOUND_SUBJECT", "cmd.lp.quote_request.v1.RIO"),
-		OutboundSubject:     getEnv("OUTBOUND_SUBJECT", "evt.lp.quote_response.v1.RIO"),
-		ProductSyncInterval: getEnvDuration("PRODUCT_SYNC_INTERVAL", 1*time.Hour),
-		ProductTable:        getEnv("PRODUCT_TABLE", "reference.venue_products"),
-		SettlementCutOff:    getEnvTime("SETTLEMENT_CUT_OFF", "17:00"),
-		PGMaxConns:          getEnvInt("PG_MAX_CONNS", 10),
-		PGMinConns:          getEnvInt("PG_MIN_CONNS", 2),
-		PGMaxConnLifetime:   getEnvDuration("PG_MAX_CONN_LIFETIME", 30*time.Minute),
-		PGMaxConnIdleTime:   getEnvDuration("PG_MAX_CONN_IDLE_TIME", 5*time.Minute),
-		PGHealthCheckPeriod: getEnvDuration("PG_HEALTH_CHECK_PERIOD", 1*time.Minute),
+		Env:                 pkgconfig.GetEnv("ENV", "dev"),
+		DatabaseURL:         pkgconfig.GetEnv("DATABASE_URL", "postgres://checker:checker@localhost/db_checker?sslmode=disable"),
+		PollInterval:        pkgconfig.GetEnvDuration("POLL_INTERVAL", 5*time.Minute),
+		NATSURL:             pkgconfig.GetEnv("NATS_URL", "nats://localhost:4222"),
+		RedisAddr:           pkgconfig.GetEnv("REDIS_ADDR", "localhost:6379"),
+		RedisDB:             pkgconfig.GetEnvInt("REDIS_DB", 0),
+		RedisPass:           pkgconfig.GetEnv("REDIS_PASS", ""),
+		AWSRegion:           pkgconfig.GetEnv("AWS_REGION", "us-east-2"),
+		LogLevel:            pkgconfig.GetEnv("LOG_LEVEL", "info"),
+		Port:                pkgconfig.GetEnvInt("RIO_PORT", 9010),
+		HTTPReadTimeout:     pkgconfig.GetEnvDuration("HTTP_READ_TIMEOUT", 10*time.Second),
+		HTTPWriteTimeout:    pkgconfig.GetEnvDuration("HTTP_WRITE_TIMEOUT", 10*time.Second),
+		HTTPIdleTimeout:     pkgconfig.GetEnvDuration("HTTP_IDLE_TIMEOUT", 60*time.Second),
+		HTTPBodyLimit:       pkgconfig.GetEnvInt("HTTP_BODY_LIMIT", 1*1024*1024),
+		CacheTTL:            pkgconfig.GetEnvDuration("CACHE_TTL", 24*time.Hour),
+		CleanupFreq:         pkgconfig.GetEnvDuration("CACHE_CLEANUP_FREQ", 10*time.Minute),
+		InboundSubject:      pkgconfig.GetEnv("INBOUND_SUBJECT", "cmd.lp.quote_request.v1.RIO"),
+		OutboundSubject:     pkgconfig.GetEnv("OUTBOUND_SUBJECT", "evt.lp.quote_response.v1.RIO"),
+		ProductSyncInterval: pkgconfig.GetEnvDuration("PRODUCT_SYNC_INTERVAL", 1*time.Hour),
+		ProductTable:        pkgconfig.GetEnv("PRODUCT_TABLE", "reference.venue_products"),
+		SettlementCutOff:    pkgconfig.GetEnvTime("SETTLEMENT_CUT_OFF", "17:00"),
+		PGMaxConns:          pkgconfig.GetEnvInt("PG_MAX_CONNS", 10),
+		PGMinConns:          pkgconfig.GetEnvInt("PG_MIN_CONNS", 2),
+		PGMaxConnLifetime:   pkgconfig.GetEnvDuration("PG_MAX_CONN_LIFETIME", 30*time.Minute),
+		PGMaxConnIdleTime:   pkgconfig.GetEnvDuration("PG_MAX_CONN_IDLE_TIME", 5*time.Minute),
+		PGHealthCheckPeriod: pkgconfig.GetEnvDuration("PG_HEALTH_CHECK_PERIOD", 1*time.Minute),
 
 		// Rio-specific configuration (per-client config resolved from AWS Secrets Manager)
-		RioPollInterval:           getEnvDuration("RIO_POLL_INTERVAL", 30*time.Second),
-		RioWebhookURL:             getEnv("RIO_WEBHOOK_URL", ""),
-		RioWebhookSecret:          getEnv("RIO_WEBHOOK_SECRET", ""),
-		RioWebhookSignatureHeader: getEnv("RIO_WEBHOOK_SIGNATURE_HEADER", "X-Rio-Signature"),
+		RioPollInterval:           pkgconfig.GetEnvDuration("RIO_POLL_INTERVAL", 30*time.Second),
+		RioWebhookURL:             pkgconfig.GetEnv("RIO_WEBHOOK_URL", ""),
+		RioWebhookSecret:          pkgconfig.GetEnv("RIO_WEBHOOK_SECRET", ""),
+		RioWebhookSignatureHeader: pkgconfig.GetEnv("RIO_WEBHOOK_SIGNATURE_HEADER", "X-Rio-Signature"),
 	}
 
 	return cfg
 }
 
-func getEnv(key, def string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
-	}
-	return def
-}
-
-func getEnvInt(key string, def int) int {
-	if val := os.Getenv(key); val != "" {
-		if i, err := strconv.Atoi(val); err == nil {
-			return i
-		}
-	}
-	return def
-}
-
-func getEnvDuration(key string, def time.Duration) time.Duration {
-	if val := os.Getenv(key); val != "" {
-		if d, err := time.ParseDuration(val); err == nil {
-			return d
-		}
-	}
-	return def
-}
-
-func getEnvTime(key, defaultTime string) time.Time {
-	value := os.Getenv(key)
-	if value == "" {
-		value = defaultTime
-	}
-
-	// Parse as time only (HH:MM format)
-	t, err := time.Parse("15:04", value)
-	if err != nil {
-		t, _ = time.Parse("15:04", defaultTime)
-	}
-
-	// This gives us a time on Jan 1, 0000, but we only care about the time portion
-	return t
-}
