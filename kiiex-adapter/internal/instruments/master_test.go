@@ -21,11 +21,11 @@ func TestMaster_LoadFromFile(t *testing.T) {
 	}`
 	tmpFile, err := os.CreateTemp("", "symbol_mapping_*.json")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	_, err = tmpFile.WriteString(content)
 	require.NoError(t, err)
-	tmpFile.Close()
+	require.NoError(t, tmpFile.Close())
 
 	// Load the file
 	err = master.LoadFromFile(tmpFile.Name())
@@ -115,11 +115,11 @@ func TestMaster_LoadFromFile_InvalidJSON(t *testing.T) {
 	// Create a temporary file with invalid JSON
 	tmpFile, err := os.CreateTemp("", "invalid_*.json")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	_, err = tmpFile.WriteString("invalid json")
 	require.NoError(t, err)
-	tmpFile.Close()
+	require.NoError(t, tmpFile.Close())
 
 	err = master.LoadFromFile(tmpFile.Name())
 	assert.Error(t, err)

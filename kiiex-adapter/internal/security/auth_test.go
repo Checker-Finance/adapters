@@ -93,7 +93,7 @@ func TestValidate(t *testing.T) {
 				AccountID: 100,
 			},
 			wantErr: true,
-			errMsg:  "Nonce is required",
+			errMsg:  "nonce is required",
 		},
 		{
 			name: "missing OmsID",

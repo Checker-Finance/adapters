@@ -183,7 +183,7 @@ func (c *Client) scheduleReconnect() {
 // Reconnect attempts to reconnect to the WebSocket
 func (c *Client) Reconnect(ctx context.Context) error {
 	if c.conn != nil {
-		c.conn.Close()
+		_ = c.conn.Close()
 	}
 	return c.Connect(ctx)
 }

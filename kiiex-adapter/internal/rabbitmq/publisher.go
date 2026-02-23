@@ -1,6 +1,7 @@
 package rabbitmq
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -35,7 +36,7 @@ func NewPublisher(url string, eventBus *eventbus.EventBus, logger *zap.Logger) (
 
 	channel, err := conn.Channel()
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to open channel: %w", err)
 	}
 
@@ -86,11 +87,12 @@ func (p *Publisher) publishFillArrived(event *order.FillArrivedEvent) {
 		return
 	}
 
-	err = p.channel.Publish(
-		"",               // exchange
+	err = p.channel.PublishWithContext(
+		context.Background(),
+		"",                // exchange
 		TopicFillsCreated, // routing key
-		false,            // mandatory
-		false,            // immediate
+		false,             // mandatory
+		false,             // immediate
 		amqp.Publishing{
 			ContentType: "application/json",
 			Body:        body,
@@ -115,11 +117,12 @@ func (p *Publisher) publishOrderCanceled(event *order.OrderCanceledEvent) {
 		return
 	}
 
-	err = p.channel.Publish(
-		"",                        // exchange
+	err = p.channel.PublishWithContext(
+		context.Background(),
+		"",                         // exchange
 		TopicReturnedOrderCanceled, // routing key
-		false,                     // mandatory
-		false,                     // immediate
+		false,                      // mandatory
+		false,                      // immediate
 		amqp.Publishing{
 			ContentType: "application/json",
 			Body:        body,
@@ -134,7 +137,7 @@ func (p *Publisher) publishOrderCanceled(event *order.OrderCanceledEvent) {
 // Close closes the publisher
 func (p *Publisher) Close() error {
 	if p.channel != nil {
-		p.channel.Close()
+		_ = p.channel.Close()
 	}
 	if p.conn != nil {
 		return p.conn.Close()

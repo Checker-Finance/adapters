@@ -33,7 +33,7 @@ func main() {
 	if err != nil {
 		panic("failed to initialize logger: " + err.Error())
 	}
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 
 	logger.Info("Starting kiiex-adapter", zap.String("version", Version))
 
@@ -114,9 +114,15 @@ func main() {
 
 	// Stop services
 	tradeStatusService.Stop()
-	consumer.Close()
-	publisher.Close()
-	session.Close()
+	if err := consumer.Close(); err != nil {
+		logger.Error("failed to close consumer", zap.Error(err))
+	}
+	if err := publisher.Close(); err != nil {
+		logger.Error("failed to close publisher", zap.Error(err))
+	}
+	if err := session.Close(); err != nil {
+		logger.Error("failed to close session", zap.Error(err))
+	}
 
 	// Cancel main context
 	cancel()

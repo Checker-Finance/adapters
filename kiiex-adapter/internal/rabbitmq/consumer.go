@@ -36,7 +36,7 @@ func NewConsumer(url, provider string, orderService OrderService, logger *zap.Lo
 
 	channel, err := conn.Channel()
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to open channel: %w", err)
 	}
 
@@ -106,17 +106,17 @@ func (c *Consumer) consumeCreatedOrders(ctx context.Context, msgs <-chan amqp.De
 			var cmd order.SubmitOrderCommand
 			if err := json.Unmarshal(msg.Body, &cmd); err != nil {
 				c.logger.Error("Failed to unmarshal SubmitOrderCommand", zap.Error(err))
-				msg.Nack(false, false)
+				_ = msg.Nack(false, false)
 				continue
 			}
 
 			if err := c.orderService.ExecuteOrder(ctx, &cmd); err != nil {
 				c.logger.Error("Failed to execute order", zap.Error(err))
-				msg.Nack(false, true) // Requeue on failure
+				_ = msg.Nack(false, true) // Requeue on failure
 				continue
 			}
 
-			msg.Ack(false)
+			_ = msg.Ack(false)
 		}
 	}
 }
@@ -139,17 +139,17 @@ func (c *Consumer) consumeCanceledOrders(ctx context.Context, msgs <-chan amqp.D
 			var cmd order.CancelOrderCommand
 			if err := json.Unmarshal(msg.Body, &cmd); err != nil {
 				c.logger.Error("Failed to unmarshal CancelOrderCommand", zap.Error(err))
-				msg.Nack(false, false)
+				_ = msg.Nack(false, false)
 				continue
 			}
 
 			if err := c.orderService.CancelOrder(ctx, cmd.OrderID); err != nil {
 				c.logger.Error("Failed to cancel order", zap.Error(err))
-				msg.Nack(false, true) // Requeue on failure
+				_ = msg.Nack(false, true) // Requeue on failure
 				continue
 			}
 
-			msg.Ack(false)
+			_ = msg.Ack(false)
 		}
 	}
 }
@@ -159,7 +159,7 @@ func (c *Consumer) Close() error {
 	close(c.done)
 
 	if c.channel != nil {
-		c.channel.Close()
+		_ = c.channel.Close()
 	}
 	if c.conn != nil {
 		return c.conn.Close()

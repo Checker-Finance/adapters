@@ -44,7 +44,7 @@ func (a *Auth) Validate() error {
 		return fmt.Errorf("UserID is required")
 	}
 	if a.Nonce == "" {
-		return fmt.Errorf("Nonce is required")
+		return fmt.Errorf("nonce is required")
 	}
 	if a.OmsID == 0 {
 		return fmt.Errorf("OmsID is required")
