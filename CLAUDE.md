@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Structure
 
-This is a monorepo of venue adapters — Go microservices that integrate Checker with external trading venues, normalize data to canonical models, and publish events to NATS JetStream.
+This is a monorepo of venue adapters — Go microservices that integrate Checker with external trading venues, normalize data to canonical models, and publish events downstream.
 
 All adapters share a single root Go module (`github.com/Checker-Finance/adapters`).
 
@@ -23,17 +23,18 @@ adapters/                    # Root module (go.mod here)
 │   ├── metrics/             # Shared Prometheus metrics
 │   ├── secrets/             # Generic AWSResolver[T any] for multi-tenant config
 │   └── jobs/                # Background jobs (summary refresher)
-├── rio-adapter/             # Rio Bank FXCore integration (production)
-├── braza-adapter/           # Braza FX integration
+├── rio-adapter/             # Rio Bank FXCore integration (Fiber + NATS + Postgres/Redis)
+├── braza-adapter/           # Braza FX integration (Fiber + NATS + Postgres/Redis)
+├── kiiex-adapter/           # Kiiex/AlphaPoint integration (WebSocket + RabbitMQ)
 └── scripts/                 # OIDC AWS setup scripts
 ```
 
-Each adapter directory has its own `Makefile`, `Dockerfile`, `k8s/`, and `pkg/config/`.
+Each adapter directory has its own `Makefile` and `Dockerfile`. Rio and Braza also have `k8s/` and `pkg/config/`. Kiiex has `configs/` (symbol mapping JSON) and `pkg/eventbus/` instead.
 Docker images are built from the repo root as build context.
 
 ## Common Commands
 
-Run from within an adapter directory (e.g., `rio-adapter/` or `braza-adapter/`):
+Run from within an adapter directory (e.g., `rio-adapter/`, `braza-adapter/`, or `kiiex-adapter/`):
 
 ```bash
 make build              # Compile binary to ./bin/<adapter-name>
@@ -71,7 +72,7 @@ go test -v -tags integration -run TestName ./...
 
 ### Adapter Pattern
 
-Each adapter follows this layered structure:
+Rio and Braza follow this layered structure:
 
 ```
 <adapter>/
@@ -92,15 +93,35 @@ Each adapter follows this layered structure:
   k8s/                   # Kustomize base + dev/prod overlays
 ```
 
+Kiiex follows a different shape (WebSocket + RabbitMQ, no Fiber/NATS/Postgres/Redis):
+
+```
+kiiex-adapter/
+  cmd/kiiex-adapter/main.go   # Entry point: config, auth, DI wiring, graceful shutdown
+  internal/
+    alphapoint/               # WebSocket client + session for AlphaPoint/Kiiex exchange
+    config/                   # Environment variable config loader
+    instruments/              # Symbol mapping (loaded from configs/symbol_mapping.json)
+    order/                    # Order models, commands, events, service, adapters
+    rabbitmq/                 # RabbitMQ consumer (incoming orders) + publisher (outgoing events)
+    security/                 # Auth (HMAC signature) + AWS Secrets Manager fetch
+    tracking/                 # Trade status service (subscribes to eventbus, publishes results)
+  pkg/eventbus/               # In-process pub/sub event bus (kiiex-specific)
+  configs/                    # symbol_mapping.json
+  Dockerfile                  # Multi-stage build; uses repo root as build context
+  Makefile                    # All targets delegate to repo root via `cd ..`
+```
+
 ### Key Design Patterns
 
 - **Single root module** — `github.com/Checker-Finance/adapters`; shared packages live in `pkg/` and `internal/`
 - **Multi-tenant by design** — every operation keyed by `clientID`
-- **Generic secret resolver** — `internal/secrets.AWSResolver[T any]` resolves per-client config from AWS Secrets Manager; each adapter wraps it with a thin, typed facade in `<adapter>/internal/secrets/`
-- **Per-client secrets** — resolved at `{env}/{clientId}/{venue}`, cached in-memory with TTL
-- **Dual order-status mechanism** — webhook handler for real-time updates + poller as fallback
-- **Canonical event envelopes** — all NATS events wrapped with correlation IDs and metadata
-- **Hybrid storage** — Redis for speed, Postgres for durability; store layer abstracts both
+- **Generic secret resolver** — `internal/secrets.AWSResolver[T any]` resolves per-client config from AWS Secrets Manager; rio and braza wrap it in `<adapter>/internal/secrets/`; kiiex fetches a single named secret directly in `internal/security/secrets.go`
+- **Per-client secrets** (rio/braza) — resolved at `{env}/{clientId}/{venue}`, cached in-memory with TTL
+- **Dual order-status mechanism** (rio/braza) — webhook handler for real-time updates + poller as fallback
+- **Canonical event envelopes** (rio/braza) — all NATS events wrapped with correlation IDs and metadata
+- **Hybrid storage** (rio/braza) — Redis for speed, Postgres for durability; store layer abstracts both
+- **In-process event bus** (kiiex) — `pkg/eventbus` decouples order service from RabbitMQ publisher and trade status tracker
 - **Dependency injection** via constructor functions; interface-based abstractions for testability
 
 ### NATS Event Subjects (Rio)
@@ -111,6 +132,13 @@ Published to JetStream with format `evt.trade.<event>.v1.RIO`:
 - `evt.trade.rejected.v1.RIO`
 - `evt.trade.cancelled.v1.RIO`
 - `evt.trade.refunded.v1.RIO`
+
+### RabbitMQ (Kiiex)
+
+Kiiex uses RabbitMQ instead of NATS:
+- **Consumer** — reads incoming order commands from a queue keyed by `provider` (e.g. `kiiex`)
+- **Publisher** — publishes trade status events back to RabbitMQ after AlphaPoint order updates
+- In-process flow: RabbitMQ consumer → order service → AlphaPoint WebSocket → eventbus → trade status tracker → RabbitMQ publisher
 
 ## CI/CD
 
@@ -128,8 +156,9 @@ Workflows in `.github/workflows/`:
 ## Adding a New Adapter
 
 New adapters should:
-1. Live under `<name>-adapter/` with the same directory layout as existing adapters
+1. Live under `<name>-adapter/` with the same directory layout as the closest existing adapter
 2. Import shared packages from `github.com/Checker-Finance/adapters/pkg/...` and `github.com/Checker-Finance/adapters/internal/...`
-3. Wrap `internal/secrets.AWSResolver[T]` with a typed facade in `<adapter>/internal/secrets/`
-4. Use `internal/legacy.NewTradeSyncWriter(pool, logger, "<adapter-name>")` for trade syncing
-5. Mirror Makefile targets, Dockerfile shape (root build context), k8s layout, and CI workflow
+3. For Fiber + NATS adapters (rio/braza pattern): wrap `internal/secrets.AWSResolver[T]` with a typed facade in `<adapter>/internal/secrets/` and use `internal/legacy.NewTradeSyncWriter(pool, logger, "<adapter-name>")` for trade syncing
+4. For non-NATS adapters (kiiex pattern): implement secrets fetch directly in `internal/security/`; use `pkg/eventbus` for in-process decoupling if needed
+5. Mirror Makefile targets and Dockerfile shape (root build context) from an existing adapter
+6. Add a CI workflow under `.github/workflows/build-and-push-<name>-adapter.yml` with path triggers for `<name>-adapter/**`, `pkg/**`, `internal/**`, `go.mod`, `go.sum`
