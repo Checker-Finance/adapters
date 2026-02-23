@@ -10,22 +10,22 @@ import (
 	"time"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/api"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/jobs"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/legacy"
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/utils"
+	"github.com/Checker-Finance/adapters/internal/jobs"
+	"github.com/Checker-Finance/adapters/internal/legacy"
+	"github.com/Checker-Finance/adapters/pkg/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/nats-io/nats.go"
 	_ "go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/auth"
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/braza"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/publisher"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/rate"
+	"github.com/Checker-Finance/adapters/internal/publisher"
+	"github.com/Checker-Finance/adapters/internal/rate"
 	intsecrets "github.com/Checker-Finance/adapters/braza-adapter/internal/secrets"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/store"
+	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/logger"
-	pkgsecrets "github.com/Checker-Finance/adapters/braza-adapter/pkg/secrets"
+	"github.com/Checker-Finance/adapters/pkg/logger"
+	pkgsecrets "github.com/Checker-Finance/adapters/pkg/secrets"
 )
 
 func main() {
@@ -46,7 +46,7 @@ func main() {
 	defer nc.Drain() //nolint:errcheck
 
 	// --- Create secrets cache ---
-	cache := pkgsecrets.NewCache(30 * time.Minute)
+	cache := pkgsecrets.NewCache[pkgsecrets.Credentials](30 * time.Minute)
 	cacheAdapter := auth.NewCacheAdapter(cache)
 
 	// --- AWS Secrets Manager provider ---
@@ -58,7 +58,8 @@ func main() {
 	// --- Internal secrets resolver (multi-tenant) ---
 	resolver := intsecrets.NewAWSResolver(
 		logg.Desugar(),
-		awsProvider.(*pkgsecrets.AWSSecretsManagerProvider),
+		cfg.Env,
+		awsProvider,
 		cache,
 	)
 
@@ -81,7 +82,7 @@ func main() {
 	})
 
 	// --- Store (Redis + Postgres hybrid) ---
-	st, err := store.NewHybrid(cfg.RedisAddr, cfg.RedisDB, cfg.DatabaseURL)
+	st, err := store.NewHybrid(cfg.RedisAddr, cfg.RedisDB, cfg.DatabaseURL, store.PGPoolConfig{}, logg.Desugar())
 	if err != nil {
 		logg.Fatalw("failed to init store", "error", err)
 	}
@@ -97,7 +98,7 @@ func main() {
 	)
 	go rfqSweeper.Start(ctx)
 
-	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, logger.L())
+	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, logger.L(), "braza-adapter")
 	// --- Braza service (core adapter logic) ---
 	brazaSvc := braza.NewService(
 		ctx,
@@ -128,7 +129,6 @@ func main() {
 		Service:   brazaSvc,
 		Store:     st,
 		TradeSync: tradeSyncWriter,
-		Config:    cfg,
 	}
 
 	api.RegisterRoutes(app, h, ph, oh)

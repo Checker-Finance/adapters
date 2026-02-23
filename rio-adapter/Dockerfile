@@ -9,21 +9,22 @@ ENV CGO_ENABLED=0 \
     GOARCH=amd64 \
     GO111MODULE=on
 
-# Create app directory
+# Create app directory (repo root is build context)
 WORKDIR /app
 
 # Copy go.mod and go.sum first (for better layer caching)
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy the rest of the source
-COPY . .
+# Copy shared packages
+COPY pkg/ ./pkg/
+COPY internal/ ./internal/
 
-# Run tests (optional but recommended)
-# RUN make test
+# Copy rio-adapter source
+COPY rio-adapter/ ./rio-adapter/
 
 # Build binary
-RUN make build || go build -o ./bin/rio-adapter ./cmd/rio-adapter/main.go
+RUN go build -trimpath -o ./rio-adapter/bin/rio-adapter ./rio-adapter/cmd/rio-adapter/main.go
 
 # ============================================================
 # Stage 2 — Runtime (scratch/alpine for small image)
@@ -47,7 +48,7 @@ USER app
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /app/bin/rio-adapter .
+COPY --from=builder /app/rio-adapter/bin/rio-adapter .
 
 # Env vars (can be overridden in K8s/Argo)
 ENV LOG_LEVEL=info \

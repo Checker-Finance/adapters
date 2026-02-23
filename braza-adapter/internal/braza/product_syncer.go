@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/auth"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/store"
+	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/model"
+	"github.com/Checker-Finance/adapters/pkg/model"
 	"go.uber.org/zap"
 )
 

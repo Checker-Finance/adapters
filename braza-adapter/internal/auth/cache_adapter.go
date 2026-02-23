@@ -5,16 +5,16 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/secrets"
+	"github.com/Checker-Finance/adapters/pkg/secrets"
 )
 
 // CacheAdapter bridges the in-memory secrets.Cache to the Manager’s expected API.
 // It can store both credentials and short-lived token bundles as JSON.
 type CacheAdapter struct {
-	Local *secrets.Cache
+	Local *secrets.Cache[secrets.Credentials]
 }
 
-func NewCacheAdapter(local *secrets.Cache) *CacheAdapter {
+func NewCacheAdapter(local *secrets.Cache[secrets.Credentials]) *CacheAdapter {
 	return &CacheAdapter{Local: local}
 }
 

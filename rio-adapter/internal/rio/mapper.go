@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Checker-Finance/adapters/rio-adapter/pkg/model"
+	"github.com/Checker-Finance/adapters/pkg/model"
 )
 
 //

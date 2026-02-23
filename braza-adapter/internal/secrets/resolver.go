@@ -3,70 +3,54 @@ package secrets
 import (
 	"context"
 	"fmt"
-	"strings"
 
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
+	intsecrets "github.com/Checker-Finance/adapters/internal/secrets"
+	pkgsecrets "github.com/Checker-Finance/adapters/pkg/secrets"
 	"go.uber.org/zap"
-
-	pkgsecrets "github.com/Checker-Finance/adapters/braza-adapter/pkg/secrets"
 )
 
-// AWSResolver resolves credentials for tenants/clients from AWS Secrets Manager,
-// caching them locally to reduce API calls.
+// Provider is the interface expected by components needing per-client credential resolution.
+type Provider interface {
+	Resolve(ctx context.Context, clientID string) (pkgsecrets.Credentials, error)
+}
+
+// AWSResolver wraps the generic AWSResolver to provide Braza-specific credential resolution.
 type AWSResolver struct {
-	logger *zap.Logger
-	awsSM  *pkgsecrets.AWSSecretsManagerProvider
-	cache  *pkgsecrets.Cache
+	inner *intsecrets.AWSResolver[pkgsecrets.Credentials]
 }
 
-// NewAWSResolver constructs a multi-tenant secret resolver using AWS Secrets Manager and local cache.
-func NewAWSResolver(logger *zap.Logger, awsSM *pkgsecrets.AWSSecretsManagerProvider, cache *pkgsecrets.Cache) *AWSResolver {
-	return &AWSResolver{
-		logger: logger,
-		awsSM:  awsSM,
-		cache:  cache,
-	}
+// NewAWSResolver constructs an AWSResolver for the Braza adapter.
+func NewAWSResolver(
+	logger *zap.Logger,
+	env string,
+	provider pkgsecrets.Provider,
+	cache *pkgsecrets.Cache[pkgsecrets.Credentials],
+) *AWSResolver {
+	inner := intsecrets.NewAWSResolver(logger, env, "braza", provider, cache)
+	return &AWSResolver{inner: inner}
 }
 
-func (r *AWSResolver) Key(clientID, venue string) string {
-	return strings.ToLower(fmt.Sprintf("%s|%s", clientID, venue))
+// Resolve fetches or caches Braza credentials for a given client ID.
+func (r *AWSResolver) Resolve(ctx context.Context, clientID string) (pkgsecrets.Credentials, error) {
+	return r.inner.Resolve(ctx, clientID, parseCredentials)
 }
 
-func (r *AWSResolver) SecretName(env, clientID, venue string) string {
-	return strings.ToLower(fmt.Sprintf("%s/%s/%s", env, clientID, venue))
+// DiscoverClients lists all client IDs configured in AWS Secrets Manager for Braza.
+func (r *AWSResolver) DiscoverClients(ctx context.Context) ([]string, error) {
+	return r.inner.DiscoverClients(ctx)
 }
 
-// Resolve fetches or caches credentials for a given tenant/client/venue triple.
-func (r *AWSResolver) Resolve(ctx context.Context, cfg config.Config, clientID, venue string) (pkgsecrets.Credentials, error) {
-	key := r.Key(clientID, venue)
-
-	// --- check in-memory cache first ---
-	if creds, ok := r.cache.Get(key); ok {
-		return creds, nil
-	}
-
-	// --- fetch from AWS Secrets Manager ---
-	secretName := r.SecretName(cfg.Env, clientID, venue)
-	secretMap, err := r.awsSM.GetSecret(ctx, secretName)
-	if err != nil {
-		r.logger.Warn("aws.secret_fetch_failed",
-			zap.String("key", secretName),
-			zap.Error(err))
-		return pkgsecrets.Credentials{}, err
-	}
-
-	// Expect AWS SM secret as JSON: {"username": "...", "password": "..."}
+// parseCredentials extracts a Credentials value from the raw AWS secret map.
+func parseCredentials(m map[string]string) (pkgsecrets.Credentials, error) {
 	creds := pkgsecrets.Credentials{
-		Username: secretMap["username"],
-		Password: secretMap["password"],
+		Username: m["username"],
+		Password: m["password"],
 	}
-
-	// --- cache locally for next time ---
-	r.cache.Put(key, creds)
-
-	r.logger.Info("aws.secret_resolved",
-		zap.String("client", clientID),
-		zap.String("venue", venue),
-	)
+	if creds.Username == "" {
+		return pkgsecrets.Credentials{}, fmt.Errorf("missing 'username' in secret")
+	}
+	if creds.Password == "" {
+		return pkgsecrets.Credentials{}, fmt.Errorf("missing 'password' in secret")
+	}
 	return creds, nil
 }

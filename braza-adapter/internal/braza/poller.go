@@ -6,14 +6,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/legacy"
+	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
 	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/auth"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/publisher"
+	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/secrets"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/store"
+	"github.com/Checker-Finance/adapters/internal/store"
 )
 
 // Poller handles scheduled polling of Braza balances and order/trade status.
@@ -104,7 +104,7 @@ func (p *Poller) Stop() {
 // pollBalancesOnce executes one balance poll for a single client.
 func (p *Poller) pollBalancesOnce(ctx context.Context, clientID string) {
 	// Resolve Braza credentials
-	rcreds, err := p.secretProvider.Resolve(ctx, p.cfg, clientID, "braza")
+	rcreds, err := p.secretProvider.Resolve(ctx, clientID)
 	if err != nil {
 		p.logger.Warn("braza.resolve_failed",
 			zap.String("client", clientID),

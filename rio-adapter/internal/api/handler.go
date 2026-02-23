@@ -6,7 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
 
-	"github.com/Checker-Finance/adapters/rio-adapter/pkg/model"
+	"github.com/Checker-Finance/adapters/pkg/model"
 )
 
 // RFQService defines the interface for RFQ operations needed by the handler.

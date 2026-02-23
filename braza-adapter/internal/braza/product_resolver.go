@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/model"
+	"github.com/Checker-Finance/adapters/pkg/model"
 	"go.uber.org/zap"
 )
 

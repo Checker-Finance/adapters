@@ -11,7 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/rate"
+	"github.com/Checker-Finance/adapters/internal/rate"
 )
 
 // Client wraps low-level HTTP communication with Braza’s API.

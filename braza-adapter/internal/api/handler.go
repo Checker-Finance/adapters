@@ -9,8 +9,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/braza"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/store"
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/model"
+	"github.com/Checker-Finance/adapters/internal/store"
+	"github.com/Checker-Finance/adapters/pkg/model"
 )
 
 type Handler struct {

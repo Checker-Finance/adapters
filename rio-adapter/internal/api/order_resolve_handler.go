@@ -8,8 +8,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/rio-adapter/internal/rio"
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/store"
-	"github.com/Checker-Finance/adapters/rio-adapter/pkg/model"
+	"github.com/Checker-Finance/adapters/internal/store"
+	"github.com/Checker-Finance/adapters/pkg/model"
 )
 
 // OrderResolverService defines the interface for fetching and mapping order data.

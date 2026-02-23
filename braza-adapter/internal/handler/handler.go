@@ -11,8 +11,8 @@ import (
 
 	_ "github.com/Checker-Finance/adapters/braza-adapter/internal/auth"
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/braza"
-	_ "github.com/Checker-Finance/adapters/braza-adapter/internal/publisher"
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/model"
+	_ "github.com/Checker-Finance/adapters/internal/publisher"
+	"github.com/Checker-Finance/adapters/pkg/model"
 )
 
 // Handler consumes NATS commands for the Braza Adapter

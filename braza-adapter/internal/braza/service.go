@@ -13,14 +13,14 @@ import (
 	"time"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/auth"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/legacy"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/publisher"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/rate"
+	"github.com/Checker-Finance/adapters/internal/legacy"
+	"github.com/Checker-Finance/adapters/internal/publisher"
+	"github.com/Checker-Finance/adapters/internal/rate"
 	intsecrets "github.com/Checker-Finance/adapters/braza-adapter/internal/secrets"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/store"
+	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/model"
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/secrets"
+	"github.com/Checker-Finance/adapters/pkg/model"
+	"github.com/Checker-Finance/adapters/pkg/secrets"
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 )
@@ -172,7 +172,7 @@ func (s *Service) FetchAndPublishBalances(
 // CreateRFQ creates a new RFQ (preview quotation) on Braza.
 func (s *Service) CreateRFQ(
 	ctx context.Context, req model.RFQRequest) (*model.Quote, error) {
-	credsMap, err := s.resolver.Resolve(ctx, s.cfg, req.ClientID, "BRAZA")
+	credsMap, err := s.resolver.Resolve(ctx, req.ClientID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve creds: %w", err)
 	}
@@ -276,7 +276,7 @@ func (s *Service) ExecuteRFQ(ctx context.Context, clientID, quoteID string) (*Br
 		zap.String("quoteID", quoteID),
 	)
 
-	credsMap, err := s.resolver.Resolve(ctx, s.cfg, clientID, "BRAZA")
+	credsMap, err := s.resolver.Resolve(ctx, clientID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve creds: %w", err)
 	}
@@ -389,7 +389,7 @@ func (s *Service) FetchTradeStatus(
 
 func (s *Service) ListProducts(ctx context.Context, clientID, venue string) ([]model.Product, error) {
 	if s.productResolver.IsStale() {
-		credsMap, err := s.resolver.Resolve(ctx, s.cfg, clientID, "BRAZA")
+		credsMap, err := s.resolver.Resolve(ctx, clientID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve creds: %w", err)
 		}

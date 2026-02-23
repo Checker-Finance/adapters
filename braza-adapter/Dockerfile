@@ -8,11 +8,18 @@ ENV CGO_ENABLED=0 \
 
 WORKDIR /app
 
-COPY go.mod ./
-RUN go mod download
+# Copy root module files first for cache efficiency
+COPY go.mod go.sum ./
 
-COPY . .
-RUN go build -o ./bin/braza-adapter ./cmd/braza-adapter/main.go
+# Copy all shared packages
+COPY pkg/ ./pkg/
+COPY internal/ ./internal/
+
+# Copy braza-adapter source
+COPY braza-adapter/ ./braza-adapter/
+
+RUN go mod download
+RUN go build -trimpath -o ./braza-adapter/bin/braza-adapter ./braza-adapter/cmd/braza-adapter/main.go
 
 # Stage 2 — Runtime
 FROM alpine:3.20
@@ -28,7 +35,7 @@ RUN addgroup -S app && adduser -S app -G app
 USER app
 
 WORKDIR /app
-COPY --from=builder /app/bin/braza-adapter .
+COPY --from=builder /app/braza-adapter/bin/braza-adapter .
 
 ENV LOG_LEVEL=info
 

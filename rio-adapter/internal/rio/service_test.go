@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/rio-adapter/pkg/config"
-	"github.com/Checker-Finance/adapters/rio-adapter/pkg/model"
+	"github.com/Checker-Finance/adapters/pkg/model"
 )
 
 // --- Mock ConfigResolver ---

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/Checker-Finance/adapters/rio-adapter/internal/rio"
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/store"
+	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/nats-io/nats.go"

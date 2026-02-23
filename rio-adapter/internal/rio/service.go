@@ -9,11 +9,11 @@ import (
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/legacy"
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/publisher"
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/store"
+	"github.com/Checker-Finance/adapters/internal/legacy"
+	"github.com/Checker-Finance/adapters/internal/publisher"
+	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/Checker-Finance/adapters/rio-adapter/pkg/config"
-	"github.com/Checker-Finance/adapters/rio-adapter/pkg/model"
+	"github.com/Checker-Finance/adapters/pkg/model"
 )
 
 // Service orchestrates Rio API operations: quote creation, order execution,

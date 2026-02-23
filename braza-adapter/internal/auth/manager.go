@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/secrets"
+	"github.com/Checker-Finance/adapters/pkg/secrets"
 	"go.uber.org/zap"
 )
 

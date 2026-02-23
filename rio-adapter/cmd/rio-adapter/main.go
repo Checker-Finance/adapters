@@ -9,16 +9,16 @@ import (
 	"time"
 
 	"github.com/Checker-Finance/adapters/rio-adapter/internal/api"
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/legacy"
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/publisher"
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/rate"
+	"github.com/Checker-Finance/adapters/internal/legacy"
+	"github.com/Checker-Finance/adapters/internal/publisher"
+	"github.com/Checker-Finance/adapters/internal/rate"
 	"github.com/Checker-Finance/adapters/rio-adapter/internal/rio"
 	internalsecrets "github.com/Checker-Finance/adapters/rio-adapter/internal/secrets"
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/store"
+	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/Checker-Finance/adapters/rio-adapter/pkg/config"
-	"github.com/Checker-Finance/adapters/rio-adapter/pkg/logger"
-	"github.com/Checker-Finance/adapters/rio-adapter/pkg/secrets"
-	"github.com/Checker-Finance/adapters/rio-adapter/pkg/utils"
+	"github.com/Checker-Finance/adapters/pkg/logger"
+	"github.com/Checker-Finance/adapters/pkg/secrets"
+	"github.com/Checker-Finance/adapters/pkg/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/nats-io/nats.go"
 )
@@ -95,7 +95,7 @@ func main() {
 	}
 
 	// --- Legacy trade sync writer ---
-	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, logger.L())
+	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, logger.L(), "rio-adapter")
 
 	// --- Rio HTTP Client (config supplied per-request) ---
 	rioClient := rio.NewClient(

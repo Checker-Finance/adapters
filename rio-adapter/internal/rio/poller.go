@@ -8,9 +8,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/legacy"
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/publisher"
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/store"
+	"github.com/Checker-Finance/adapters/internal/legacy"
+	"github.com/Checker-Finance/adapters/internal/publisher"
+	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/Checker-Finance/adapters/rio-adapter/pkg/config"
 )
 

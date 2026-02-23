@@ -5,6 +5,10 @@ on:
     branches: [ main ]
     paths:
       - 'braza-adapter/**'
+      - 'pkg/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
   workflow_dispatch:
 
 env:
@@ -17,19 +21,18 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: braza-adapter
+        working-directory: .
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
-          cache-dependency-path: braza-adapter/go.sum
-      - run: go test -race -count=1 ./...
+          cache-dependency-path: go.sum
+      - run: go test -race -count=1 ./braza-adapter/... ./internal/... ./pkg/...
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
           version: latest
-          working-directory: braza-adapter
           args: --timeout=5m
 
   build-and-push:
@@ -57,7 +60,7 @@ jobs:
             -f braza-adapter/Dockerfile \
             -t $ECR_REGISTRY/$IMAGE_NAME:${{ steps.commit.outputs.sha }} \
             -t $ECR_REGISTRY/$IMAGE_NAME:latest \
-            braza-adapter
+            .
 
       - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@master

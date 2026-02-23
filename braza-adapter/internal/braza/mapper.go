@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/model"
+	"github.com/Checker-Finance/adapters/pkg/model"
 	"github.com/gofiber/fiber/v2/log"
 )
 

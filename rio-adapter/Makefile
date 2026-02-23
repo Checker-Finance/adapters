@@ -2,15 +2,15 @@
 # Service Metadata
 # ─────────────────────────────────────────────
 SERVICE        := rio-adapter
-PKG            := github.com/Checker-Finance/adapters/rio-adapter
+PKG            := github.com/Checker-Finance/adapters
 BIN            := ./bin/$(SERVICE)
-MAIN           := ./cmd/$(SERVICE)/main.go
+MAIN           := ./$(SERVICE)/cmd/$(SERVICE)/main.go
 
 # ─────────────────────────────────────────────
 # ⚙️ Build Settings
 # ─────────────────────────────────────────────
 GO             := go
-GOFLAGS        := -trimpath -mod=readonly
+GOFLAGS        := -trimpath
 LDFLAGS        := -s -w -X '$(PKG)/version.BuildTime=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")'
 
 # Docker / AWS
@@ -25,17 +25,17 @@ IMAGE          := $(ECR_REPO)/$(SERVICE):$(TAG)
 all: build
 
 # ─────────────────────────────────────────────
-# 🧰 Build & Run
+# 🧰 Build & Run (run from repo root)
 # ─────────────────────────────────────────────
 .PHONY: build
 build:
 	@echo "Building $(SERVICE)..."
-	@$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BIN) $(MAIN)
+	@cd .. && $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(SERVICE)/$(BIN) $(MAIN)
 
 .PHONY: run
 run:
 	@echo "Running $(SERVICE)..."
-	@$(GO) run $(MAIN)
+	@cd .. && $(GO) run $(MAIN)
 
 .PHONY: clean
 clean:
@@ -48,33 +48,33 @@ clean:
 .PHONY: test
 test:
 	@echo "🧪 Running unit tests..."
-	@$(GO) test ./... -count=1 -race -v
+	@cd .. && $(GO) test ./$(SERVICE)/... ./internal/... ./pkg/... -count=1 -race -v
 
 .PHONY: integration-test
 integration-test:
 	@echo "Running integration tests against Rio sandbox..."
-	@$(GO) test -v -tags integration -run TestIntegration ./internal/rio/ -count=1
+	@cd .. && $(GO) test -v -tags integration -run TestIntegration ./$(SERVICE)/internal/rio/ -count=1
 
 .PHONY: bench
 bench:
 	@echo "⚡ Running benchmarks..."
-	@$(GO) test -bench=. -benchmem ./...
+	@cd .. && $(GO) test -bench=. -benchmem ./$(SERVICE)/... ./internal/... ./pkg/...
 
 .PHONY: cover
 cover:
 	@echo "📊 Running coverage..."
-	@$(GO) test ./... -coverprofile=coverage.out
-	@$(GO) tool cover -func=coverage.out
+	@cd .. && $(GO) test ./$(SERVICE)/... ./internal/... ./pkg/... -coverprofile=$(SERVICE)/coverage.out
+	@$(GO) tool cover -func=$(SERVICE)/coverage.out
 
 .PHONY: fmt
 fmt:
 	@echo "✨ Formatting code..."
-	@$(GO) fmt ./...
+	@cd .. && $(GO) fmt ./$(SERVICE)/... ./internal/... ./pkg/...
 
 .PHONY: lint
 lint:
 	@echo "🔎 Linting..."
-	@golangci-lint run --timeout=5m
+	@cd .. && golangci-lint run --timeout=5m
 
 # ─────────────────────────────────────────────
 # 🐳 Docker Build & Push
@@ -82,7 +82,7 @@ lint:
 .PHONY: docker-build
 docker-build:
 	@echo "🐳 Building Docker image $(IMAGE)..."
-	@docker build -t $(IMAGE) .
+	@docker build -f $(SERVICE)/Dockerfile -t $(IMAGE) ..
 
 .PHONY: docker-push
 docker-push: docker-build
@@ -141,70 +141,6 @@ push-secret:
 			--description "Secrets for $(SERVICE) $(ENV) environment" \
 			--secret-string file://secrets/$(ENV).env.json; \
 	fi
-
-.PHONY: generate-k8s
-
-generate-k8s:
-	@if [ -z "$(ENV)" ]; then \
-		echo "❌ ENV not set. Use: make generate-k8s ENV=prod"; \
-		exit 1; \
-	fi
-	@if [ ! -f "secrets/$(ENV).env" ]; then \
-		echo "❌ secrets/$(ENV).env not found."; \
-		exit 1; \
-	fi
-	@echo "📦 Generating Deployment and ExternalSecret for $(ENV)..."
-
-	@mkdir -p k8s/generated/$(ENV)
-
-	@echo "---" > k8s/generated/$(ENV)/deployment.yaml
-	@echo "apiVersion: apps/v1" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "kind: Deployment" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "metadata:" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "  name: $(SERVICE)" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "  namespace: $(ENV)" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "spec:" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "  replicas: 1" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "  selector:" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "    matchLabels:" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "      app: $(SERVICE)" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "  template:" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "    metadata:" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "      labels:" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "        app: $(SERVICE)" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "    spec:" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "      containers:" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "      - name: $(SERVICE)" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "        image: $(ECR_REPO)" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "        imagePullPolicy: Always" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "        envFrom:" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "        - secretRef:" >> k8s/generated/$(ENV)/deployment.yaml
-	@echo "            name: $(SERVICE)-secret" >> k8s/generated/$(ENV)/deployment.yaml
-
-	@echo "---" > k8s/generated/$(ENV)/external-secret.yaml
-	@echo "apiVersion: external-secrets.io/v1" >> k8s/generated/$(ENV)/external-secret.yaml
-	@echo "kind: ExternalSecret" >> k8s/generated/$(ENV)/external-secret.yaml
-	@echo "metadata:" >> k8s/generated/$(ENV)/external-secret.yaml
-	@echo "  name: $(SERVICE)-secret" >> k8s/generated/$(ENV)/external-secret.yaml
-	@echo "  namespace: $(ENV)" >> k8s/generated/$(ENV)/external-secret.yaml
-	@echo "spec:" >> k8s/generated/$(ENV)/external-secret.yaml
-	@echo "  refreshInterval: 1h" >> k8s/generated/$(ENV)/external-secret.yaml
-	@echo "  secretStoreRef:" >> k8s/generated/$(ENV)/external-secret.yaml
-	@echo "    name: aws-secret-store" >> k8s/generated/$(ENV)/external-secret.yaml
-	@echo "    kind: ClusterSecretStore" >> k8s/generated/$(ENV)/external-secret.yaml
-	@echo "  target:" >> k8s/generated/$(ENV)/external-secret.yaml
-	@echo "    name: $(SERVICE)-secret" >> k8s/generated/$(ENV)/external-secret.yaml
-	@echo "  data:" >> k8s/generated/$(ENV)/external-secret.yaml
-
-	@cat secrets/$(ENV).env | grep -v '^#' | grep '=' | while IFS== read -r key value; do \
-		echo "  - secretKey: $$key" >> k8s/generated/$(ENV)/external-secret.yaml; \
-		echo "    remoteRef:" >> k8s/generated/$(ENV)/external-secret.yaml; \
-		echo "      key: $(ENV)/$(SERVICE)" >> k8s/generated/$(ENV)/external-secret.yaml; \
-		echo "      property: $$key" >> k8s/generated/$(ENV)/external-secret.yaml; \
-	done
-
-	@echo "✅ Generated: k8s/generated/$(ENV)/deployment.yaml"
-	@echo "✅ Generated: k8s/generated/$(ENV)/external-secret.yaml"
 
 ## ---------------------------
 ## Version bump

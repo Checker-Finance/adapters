@@ -5,9 +5,8 @@ import (
 	"net/http"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/braza"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/legacy"
-	"github.com/Checker-Finance/adapters/braza-adapter/internal/store"
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
+	"github.com/Checker-Finance/adapters/internal/legacy"
+	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
 )
@@ -17,7 +16,6 @@ type OrderResolveHandler struct {
 	Service   *braza.Service
 	Store     store.Store
 	TradeSync *legacy.TradeSyncWriter
-	Config    *config.Config
 }
 
 func (h *OrderResolveHandler) ResolveOrder(c *fiber.Ctx) error {
@@ -49,7 +47,7 @@ func (h *OrderResolveHandler) ResolveOrder(c *fiber.Ctx) error {
 	}
 
 	// 3. Resolve credentials
-	credsMap, err := h.Service.Resolver().Resolve(ctx, *h.Config, qrec.ClientID, "BRAZA")
+	credsMap, err := h.Service.Resolver().Resolve(ctx, qrec.ClientID)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "failed to resolve credentials"})
 	}

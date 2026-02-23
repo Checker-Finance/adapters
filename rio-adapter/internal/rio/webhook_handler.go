@@ -11,9 +11,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
 
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/legacy"
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/publisher"
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/store"
+	"github.com/Checker-Finance/adapters/internal/legacy"
+	"github.com/Checker-Finance/adapters/internal/publisher"
+	"github.com/Checker-Finance/adapters/internal/store"
 )
 
 // WebhookHandler handles incoming webhook events from Rio.

@@ -12,7 +12,7 @@ import (
 
 	"github.com/Checker-Finance/adapters/rio-adapter/internal/rio"
 	"github.com/Checker-Finance/adapters/rio-adapter/pkg/config"
-	pkgsecrets "github.com/Checker-Finance/adapters/rio-adapter/pkg/secrets"
+	pkgsecrets "github.com/Checker-Finance/adapters/pkg/secrets"
 )
 
 // --- Mock Provider ---
