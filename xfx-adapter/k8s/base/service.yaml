@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: xfx-adapter
+  namespace: xfx-adapter
+spec:
+  selector:
+    app.kubernetes.io/name: xfx-adapter
+  ports:
+    - name: http
+      port: 9030
+      targetPort: http
+      protocol: TCP
+  type: ClusterIP
