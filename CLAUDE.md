@@ -26,6 +26,7 @@ adapters/                    # Root module (go.mod here)
 ├── rio-adapter/             # Rio Bank FXCore integration (Fiber + NATS + Postgres/Redis)
 ├── braza-adapter/           # Braza FX integration (Fiber + NATS + Postgres/Redis)
 ├── kiiex-adapter/           # Kiiex/AlphaPoint integration (WebSocket + RabbitMQ)
+├── xfx-adapter/             # XFX Trading API integration (Fiber + NATS + Postgres/Redis)
 └── scripts/                 # OIDC AWS setup scripts
 ```
 
@@ -92,6 +93,40 @@ Rio and Braza follow this layered structure:
   Makefile               # All targets delegate to repo root via `cd ..`
   k8s/                   # Kustomize base + dev/prod overlays
 ```
+
+XFX follows the rio/braza shape (Fiber + NATS + Postgres/Redis) but uses OAuth2 Client Credentials (Auth0) instead of per-request API keys, and polling-only (no webhook support):
+
+```
+xfx-adapter/
+  cmd/xfx-adapter/main.go    # Entry point: config, auth, DI wiring, graceful shutdown
+  internal/
+    xfx/
+      types.go               # XFX API request/response types and config
+      auth.go                # OAuth2 Client Credentials token manager (Auth0)
+      client.go              # HTTP client wrapping XFX API calls
+      mapper.go              # XFX ↔ canonical model conversions + status normalization
+      service.go             # Business logic: CreateRFQ, ExecuteRFQ, FetchTransactionStatus
+      poller.go              # Transaction status polling (XFX has no webhooks)
+    api/                     # Fiber REST endpoints
+    secrets/                 # AWSResolver[XFXClientConfig] wrapper
+  pkg/config/config.go       # Environment variable config loader
+  Makefile, Dockerfile, k8s/
+```
+
+**XFX-specific notes:**
+- Auth: OAuth2 Client Credentials via Auth0 (`https://dev-er8o7vv4aka08m70.us.auth0.com/oauth/token`), audience `https://api.xfx.io/trading`, tokens cached for 24h with 5-minute refresh buffer
+- Per-client secrets: `{env}/xfx/{clientId}` → `{"client_id": "...", "client_secret": "...", "base_url": "..."}`
+- No webhooks — polling only (default `XFX_POLL_INTERVAL=15s`)
+- NATS subjects: `evt.trade.<status>.v1.XFX`
+- HTTP port: 9030
+
+**XFX API endpoints used:**
+- `POST /v1/customer/quotes` — Request executable quote (15s validity window)
+- `GET /v1/customer/quotes/{quoteId}` — Get quote status
+- `POST /v1/customer/quotes/{quoteId}/execute` — Execute trade → creates transaction
+- `GET /v1/customer/transactions/{transactionId}` — Poll transaction status
+
+**Supported currency pairs:** USD/MXN, USDT/MXN, USDC/MXN, USD/COP, USDT/COP, USDC/COP, USD/USDT, USD/USDC (all min $100,000 USD)
 
 Kiiex follows a different shape (WebSocket + RabbitMQ, no Fiber/NATS/Postgres/Redis):
 

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xfx-adapter-config
+  namespace: xfx-adapter
+data:
+  SERVICE_NAME: "xfx-adapter"
+  ENV: "base"
+  LOG_LEVEL: "info"
+  XFX_PORT: "9030"
+  XFX_POLL_INTERVAL: "15s"
+  CACHE_TTL: "24h"
+  CACHE_CLEANUP_FREQ: "10m"
+  INBOUND_SUBJECT: "cmd.lp.quote_request.v1.XFX"
+  OUTBOUND_SUBJECT: "evt.lp.quote_response.v1.XFX"
+  REDIS_DB: "0"
+  AWS_REGION: "us-east-2"
