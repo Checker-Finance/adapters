@@ -12,6 +12,7 @@ import (
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/internal/store"
+	"github.com/Checker-Finance/adapters/xfx-adapter/internal/metrics"
 	"github.com/Checker-Finance/adapters/xfx-adapter/pkg/config"
 	"github.com/Checker-Finance/adapters/pkg/model"
 )
@@ -212,10 +213,25 @@ func (s *Service) syncTerminalTrade(ctx context.Context, trade *model.TradeConfi
 		"final":     true,
 		"timestamp": time.Now().UTC(),
 	}); err != nil {
+		metrics.IncNATSPublishError(subject)
 		s.logger.Warn("xfx.publish_failed",
 			zap.String("subject", subject),
 			zap.Error(err))
 	}
+}
+
+// ResolveTransaction fetches the live transaction status from XFX and returns
+// a canonical TradeConfirmation. Used by the resolve-order endpoint.
+func (s *Service) ResolveTransaction(ctx context.Context, clientID, txID string) (*model.TradeConfirmation, error) {
+	tx, err := s.FetchTransactionStatus(ctx, clientID, txID)
+	if err != nil {
+		return nil, err
+	}
+	trade := s.BuildTradeConfirmationFromTx(clientID, tx)
+	if trade == nil {
+		return nil, fmt.Errorf("could not build trade confirmation for transaction %s", txID)
+	}
+	return trade, nil
 }
 
 // Config returns the service configuration.

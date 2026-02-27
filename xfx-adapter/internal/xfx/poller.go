@@ -11,6 +11,7 @@ import (
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/internal/store"
+	"github.com/Checker-Finance/adapters/xfx-adapter/internal/metrics"
 	"github.com/Checker-Finance/adapters/xfx-adapter/pkg/config"
 )
 
@@ -130,6 +131,7 @@ func (p *Poller) PollTradeStatus(
 						}
 						subject := "evt.trade.status_changed.v1.XFX"
 						if err := p.publisher.Publish(ctx, subject, event); err != nil {
+							metrics.IncNATSPublishError(subject)
 							p.logger.Debug("nats.publish_failed",
 								zap.String("subject", subject),
 								zap.Error(err))
@@ -191,6 +193,7 @@ func (p *Poller) handleTerminalStatus(
 			"final":     true,
 			"timestamp": time.Now().UTC(),
 		}); err != nil {
+			metrics.IncNATSPublishError(finalSubject)
 			p.logger.Debug("nats.publish_failed",
 				zap.String("subject", finalSubject),
 				zap.Error(err))

@@ -42,7 +42,10 @@ type Config struct {
 	// XFX-specific configuration
 	// Per-client config (client_id, client_secret, base_url) is resolved from
 	// AWS Secrets Manager at runtime. See internal/secrets/resolver.go.
-	XFXPollInterval time.Duration // Polling interval for XFX transaction status
+	XFXPollInterval       time.Duration // Polling interval for XFX transaction status
+	RFQSweepInterval      time.Duration // How often to expire stale RFQs/quotes in the legacy DB
+	RFQSweepTTL           time.Duration // Age threshold after which an open RFQ/quote is expired
+	SummaryRefreshInterval time.Duration // How often to refresh the balance summary materialized view
 }
 
 // Load loads configuration from environment variables and optional .env file.
@@ -76,5 +79,8 @@ func Load() *Config {
 		PGMaxConnIdleTime:   pkgconfig.GetEnvDuration("PG_MAX_CONN_IDLE_TIME", 5*time.Minute),
 		PGHealthCheckPeriod: pkgconfig.GetEnvDuration("PG_HEALTH_CHECK_PERIOD", 1*time.Minute),
 		XFXPollInterval:     pkgconfig.GetEnvDuration("XFX_POLL_INTERVAL", 15*time.Second),
+		RFQSweepInterval:       pkgconfig.GetEnvDuration("RFQ_SWEEP_INTERVAL", 5*time.Minute),
+		RFQSweepTTL:            pkgconfig.GetEnvDuration("RFQ_SWEEP_TTL", 15*time.Minute),
+		SummaryRefreshInterval: pkgconfig.GetEnvDuration("SUMMARY_REFRESH_INTERVAL", 24*time.Hour),
 	}
 }

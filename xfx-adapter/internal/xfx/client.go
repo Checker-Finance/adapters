@@ -12,6 +12,7 @@ import (
 
 	"github.com/Checker-Finance/adapters/internal/httpclient"
 	"github.com/Checker-Finance/adapters/internal/rate"
+	"github.com/Checker-Finance/adapters/xfx-adapter/internal/metrics"
 )
 
 // Client wraps low-level HTTP communication with the XFX API.
@@ -55,8 +56,13 @@ func NewClient(logger *zap.Logger, rateMgr *rate.Manager, tokens *TokenManager) 
 // RequestQuote creates a new executable quote.
 // POST /v1/customer/quotes
 func (c *Client) RequestQuote(ctx context.Context, cfg *XFXClientConfig, req *XFXQuoteRequest) (*XFXQuoteResponse, error) {
+	const endpoint, method = "/v1/customer/quotes", http.MethodPost
+	start := time.Now()
 	var resp XFXQuoteResponse
-	if err := c.postJSON(ctx, cfg, "/v1/customer/quotes", req, &resp); err != nil {
+	err := c.postJSON(ctx, cfg, endpoint, req, &resp)
+	metrics.IncXFXRequest(endpoint, method, statusLabel(err))
+	metrics.ObserveDuration(metrics.XFXRequestDuration, start, endpoint, method)
+	if err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -65,8 +71,13 @@ func (c *Client) RequestQuote(ctx context.Context, cfg *XFXClientConfig, req *XF
 // GetQuote retrieves an existing quote by ID.
 // GET /v1/customer/quotes/{quoteId}
 func (c *Client) GetQuote(ctx context.Context, cfg *XFXClientConfig, quoteID string) (*XFXQuoteResponse, error) {
+	const endpoint, method = "/v1/customer/quotes/{id}", http.MethodGet
+	start := time.Now()
 	var resp XFXQuoteResponse
-	if err := c.getJSON(ctx, cfg, "/v1/customer/quotes/"+quoteID, &resp); err != nil {
+	err := c.getJSON(ctx, cfg, "/v1/customer/quotes/"+quoteID, &resp)
+	metrics.IncXFXRequest(endpoint, method, statusLabel(err))
+	metrics.ObserveDuration(metrics.XFXRequestDuration, start, endpoint, method)
+	if err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -75,8 +86,13 @@ func (c *Client) GetQuote(ctx context.Context, cfg *XFXClientConfig, quoteID str
 // ExecuteQuote executes an active quote, creating a transaction.
 // POST /v1/customer/quotes/{quoteId}/execute
 func (c *Client) ExecuteQuote(ctx context.Context, cfg *XFXClientConfig, quoteID string) (*XFXExecuteResponse, error) {
+	const endpoint, method = "/v1/customer/quotes/{id}/execute", http.MethodPost
+	start := time.Now()
 	var resp XFXExecuteResponse
-	if err := c.postJSON(ctx, cfg, "/v1/customer/quotes/"+quoteID+"/execute", nil, &resp); err != nil {
+	err := c.postJSON(ctx, cfg, "/v1/customer/quotes/"+quoteID+"/execute", nil, &resp)
+	metrics.IncXFXRequest(endpoint, method, statusLabel(err))
+	metrics.ObserveDuration(metrics.XFXRequestDuration, start, endpoint, method)
+	if err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -85,11 +101,24 @@ func (c *Client) ExecuteQuote(ctx context.Context, cfg *XFXClientConfig, quoteID
 // GetTransaction retrieves a transaction by ID.
 // GET /v1/customer/transactions/{transactionId}
 func (c *Client) GetTransaction(ctx context.Context, cfg *XFXClientConfig, txID string) (*XFXTransactionResponse, error) {
+	const endpoint, method = "/v1/customer/transactions/{id}", http.MethodGet
+	start := time.Now()
 	var resp XFXTransactionResponse
-	if err := c.getJSON(ctx, cfg, "/v1/customer/transactions/"+txID, &resp); err != nil {
+	err := c.getJSON(ctx, cfg, "/v1/customer/transactions/"+txID, &resp)
+	metrics.IncXFXRequest(endpoint, method, statusLabel(err))
+	metrics.ObserveDuration(metrics.XFXRequestDuration, start, endpoint, method)
+	if err != nil {
 		return nil, err
 	}
 	return &resp, nil
+}
+
+// statusLabel returns "ok" or "error" for use as a Prometheus label.
+func statusLabel(err error) string {
+	if err != nil {
+		return "error"
+	}
+	return "ok"
 }
 
 // getJSON performs an authenticated GET request and decodes the JSON response.

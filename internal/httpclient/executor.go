@@ -66,6 +66,16 @@ func (e *Executor) DoJSON(ctx context.Context, req *http.Request, rateLimitKey s
 
 	var lastErr error
 	for attempt := 0; attempt <= e.retryMax; attempt++ {
+		// Reset request body before each retry so POST bodies are re-sent in full.
+		// http.NewRequest sets GetBody for *bytes.Reader / *bytes.Buffer payloads.
+		if attempt > 0 && req.GetBody != nil {
+			freshBody, err := req.GetBody()
+			if err != nil {
+				return fmt.Errorf("rebind request body for retry: %w", err)
+			}
+			req.Body = freshBody
+		}
+
 		start := time.Now()
 		resp, err := e.http.Do(req)
 		if err != nil {
@@ -77,9 +87,9 @@ func (e *Executor) DoJSON(ctx context.Context, req *http.Request, rateLimitKey s
 			time.Sleep(Backoff(attempt))
 			continue
 		}
-		defer func() { _ = resp.Body.Close() }() //nolint:gocritic
 
 		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
 		elapsed := time.Since(start)
 
 		if resp.StatusCode >= 500 {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Checker-Finance/adapters/xfx-adapter/internal/api"
+	"github.com/Checker-Finance/adapters/internal/jobs"
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/internal/rate"
@@ -97,6 +98,25 @@ func main() {
 	// --- Legacy trade sync writer ---
 	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, logger.L(), "xfx-adapter")
 
+	// --- RFQ sweeper: expires stale open RFQs and quotes in the legacy DB ---
+	rfqSweeper := legacy.NewRFQSweeper(
+		st.(*store.HybridStore).PG,
+		logger.L(),
+		cfg.RFQSweepInterval,
+		cfg.RFQSweepTTL,
+	)
+	go rfqSweeper.Start(ctx)
+
+	// --- Summary refresher: nightly balance materialized view refresh ---
+	refresher := jobs.NewSummaryRefresher(
+		logg.Desugar(),
+		nc,
+		st.(*store.HybridStore).PG,
+		pub,
+		cfg.SummaryRefreshInterval,
+	)
+	go refresher.Start(ctx)
+
 	// --- XFX Auth token manager ---
 	tokenMgr := xfx.NewTokenManager(logg.Desugar())
 
@@ -138,8 +158,9 @@ func main() {
 
 	clientValidator := api.NewResolverValidator(resolver)
 	xfxHandler := api.NewXFXHandler(logg.Desugar(), xfxSvc, clientValidator)
+	resolveHandler := api.NewOrderResolveHandler(logg.Desugar(), xfxSvc, st, tradeSyncWriter)
 
-	api.RegisterRoutes(app, nc, st, xfxHandler)
+	api.RegisterRoutes(app, nc, st, xfxHandler, resolveHandler)
 
 	// Start HTTP server
 	go func() {
