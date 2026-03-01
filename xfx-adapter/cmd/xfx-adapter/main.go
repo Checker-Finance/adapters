@@ -150,6 +150,12 @@ func main() {
 	)
 	xfxSvc.SetPoller(poller)
 
+	// --- NATS command consumer: quote requests and trade execute commands ---
+	cmdConsumer := xfx.NewCommandConsumer(nc, xfxSvc, logg.Desugar())
+	if err := cmdConsumer.Subscribe(ctx, cfg.InboundSubject, cfg.TradeExecuteSubject); err != nil {
+		logg.Fatalw("failed to subscribe to NATS command subjects", "error", err)
+	}
+
 	// --- Balance poller: periodic account balance sync ---
 	balanceClients := parseClientIDs(cfg.ClientBalanceIDs)
 	if len(balanceClients) > 0 {
@@ -170,8 +176,9 @@ func main() {
 	xfxHandler := api.NewXFXHandler(logg.Desugar(), xfxSvc, clientValidator)
 	resolveHandler := api.NewOrderResolveHandler(logg.Desugar(), xfxSvc, st, tradeSyncWriter)
 	balanceHandler := api.NewBalanceHandler(logg.Desugar(), st)
+	productsHandler := api.NewProductsHandler(xfxSvc)
 
-	api.RegisterRoutes(app, nc, st, xfxHandler, resolveHandler, balanceHandler)
+	api.RegisterRoutes(app, nc, st, xfxHandler, resolveHandler, balanceHandler, productsHandler)
 
 	// Start HTTP server
 	go func() {
@@ -191,6 +198,7 @@ func main() {
 	logg.Info("shutting down [xfx-adapter]...")
 
 	close(stopCleaner)
+	cmdConsumer.Drain()
 	poller.Stop()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

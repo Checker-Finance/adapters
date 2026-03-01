@@ -166,14 +166,6 @@ func main() {
 
 	go refresher.Start(ctx)
 
-	//syncer := braza.NewProductSyncer(
-	//	logg.Desugar(),
-	//	st,
-	//	cfg.BrazaBaseURL,
-	//	authMgr,
-	//	cfg.ProductSyncInterval,
-	//)
-
 	// --- Define tenants/clients/desks ---
 	clientsBalances := parseClientIDs(cfg.ClientBalancesIDs)
 	if len(clientsBalances) == 0 {
@@ -182,13 +174,6 @@ func main() {
 		// --- Start periodic poller ---
 		go poller.Start(ctx, clientsBalances)
 	}
-
-	//clientInstruments := parseClientIDs(cfg.ClientInstrumentsIDs)
-	//if len(clientInstruments) == 0 {
-	//	logg.Warn("no client IDs configured; skipping product syncer startup")
-	//} else {
-	//	go syncer.Start(ctx, clientsBalances[0], *cfg)
-	//}
 
 	// --- Main process stays alive until interrupted ---
 	logg.Infow("[braza-adapter] running",

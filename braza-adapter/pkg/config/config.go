@@ -32,9 +32,7 @@ type Config struct {
 	InboundSubject  string // NATS subject for commands
 	OutboundSubject string // NATS subject for events
 
-	BrazaBaseURL        string
-	ProductSyncInterval time.Duration
-	ProductTable        string
+	BrazaBaseURL string
 
 	ClientBalancesIDs  string
 	ClientInstrumentID string
@@ -62,9 +60,7 @@ func Load() *Config {
 		CleanupFreq:         pkgconfig.GetEnvDuration("CACHE_CLEANUP_FREQ", 10*time.Minute),
 		InboundSubject:      pkgconfig.GetEnv("INBOUND_SUBJECT", "cmd.lp.quote_request.v1.BRAZA"),
 		OutboundSubject:     pkgconfig.GetEnv("OUTBOUND_SUBJECT", "evt.lp.quote_response.v1.BRAZA"),
-		BrazaBaseURL:        pkgconfig.GetEnv("BRAZA_BASE_URL", "http://braza.local"),
-		ProductSyncInterval: pkgconfig.GetEnvDuration("PRODUCT_SYNC_INTERVAL", 1*time.Hour),
-		ProductTable:        pkgconfig.GetEnv("PRODUCT_TABLE", "reference.venue_products"),
+		BrazaBaseURL:      pkgconfig.GetEnv("BRAZA_BASE_URL", "http://braza.local"),
 		ClientBalancesIDs:   pkgconfig.GetEnv("CLIENT_BALANCES_IDS", ""),
 		ClientInstrumentID:  pkgconfig.GetEnv("CLIENT_INSTRUMENT_ID", ""),
 		SettlementCutOff:    pkgconfig.GetEnvTime("SETTLEMENT_CUT_OFF", "17:00"),

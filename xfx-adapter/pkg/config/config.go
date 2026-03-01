@@ -30,8 +30,9 @@ type Config struct {
 	CacheTTL    time.Duration
 	CleanupFreq time.Duration
 
-	InboundSubject  string
-	OutboundSubject string
+	InboundSubject      string // NATS subject for incoming quote request commands
+	OutboundSubject     string // NATS subject for outgoing quote response events
+	TradeExecuteSubject string // NATS subject for incoming trade execute commands
 
 	PGMaxConns          int
 	PGMinConns          int
@@ -75,6 +76,7 @@ func Load() *Config {
 		CleanupFreq:         pkgconfig.GetEnvDuration("CACHE_CLEANUP_FREQ", 10*time.Minute),
 		InboundSubject:      pkgconfig.GetEnv("INBOUND_SUBJECT", "cmd.lp.quote_request.v1.XFX"),
 		OutboundSubject:     pkgconfig.GetEnv("OUTBOUND_SUBJECT", "evt.lp.quote_response.v1.XFX"),
+		TradeExecuteSubject: pkgconfig.GetEnv("TRADE_EXECUTE_SUBJECT", "cmd.lp.trade_execute.v1.XFX"),
 		PGMaxConns:          pkgconfig.GetEnvInt("PG_MAX_CONNS", 10),
 		PGMinConns:          pkgconfig.GetEnvInt("PG_MIN_CONNS", 2),
 		PGMaxConnLifetime:   pkgconfig.GetEnvDuration("PG_MAX_CONN_LIFETIME", 30*time.Minute),

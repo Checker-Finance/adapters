@@ -273,6 +273,99 @@ func (s *Service) FetchAndPublishBalances(ctx context.Context, clientID string) 
 	return nil
 }
 
+// ListProducts returns the static list of XFX supported products.
+func (s *Service) ListProducts() []model.Product {
+	return xfxSupportedProducts
+}
+
+// HandleQuoteRequest processes a NATS quote request command by creating an RFQ
+// and publishing the quote response to the outbound subject.
+func (s *Service) HandleQuoteRequest(ctx context.Context, env model.Envelope, req model.QuoteRequest) error {
+	s.logger.Info("xfx.handle_quote_request",
+		zap.String("tenant_id", env.TenantID),
+		zap.String("client_id", env.ClientID),
+		zap.String("instrument", req.Instrument),
+	)
+
+	rfqReq := model.RFQRequest{
+		TenantID:      env.TenantID,
+		ClientID:      env.ClientID,
+		CurrencyPair:  req.Instrument,
+		Side:          req.Side,
+		Amount:        req.Quantity,
+		CorrelationID: env.CorrelationID.String(),
+		RequestTime:   req.Timestamp,
+	}
+
+	quote, err := s.CreateRFQ(ctx, rfqReq)
+	if err != nil {
+		s.logger.Error("xfx.handle_quote_request.failed",
+			zap.String("client", env.ClientID),
+			zap.Error(err))
+		return err
+	}
+
+	resp := model.QuoteResponse{
+		ID:             quote.ID,
+		QuoteRequestID: req.RequestID.String(),
+		Instrument:     quote.Instrument,
+		Venue:          "XFX",
+		Side:           req.Side,
+		Quantity:       req.Quantity,
+		ExpiresAt:      quote.ExpiresAt,
+		ReceivedAt:     time.Now().UTC(),
+	}
+
+	if err := s.publisher.Publish(ctx, s.cfg.OutboundSubject, resp); err != nil {
+		metrics.IncNATSPublishError(s.cfg.OutboundSubject)
+		s.logger.Warn("xfx.handle_quote_request.publish_failed",
+			zap.String("subject", s.cfg.OutboundSubject),
+			zap.Error(err))
+	}
+
+	return nil
+}
+
+// HandleTradeExecute processes a NATS trade execute command by executing the RFQ
+// and publishing the trade confirmation event.
+func (s *Service) HandleTradeExecute(ctx context.Context, env model.Envelope, cmd model.TradeCommand) error {
+	s.logger.Info("xfx.handle_trade_execute",
+		zap.String("tenant_id", env.TenantID),
+		zap.String("client_id", env.ClientID),
+		zap.String("quote_id", cmd.QuoteID),
+	)
+
+	trade, err := s.ExecuteRFQ(ctx, cmd.ClientID, cmd.QuoteID)
+	if err != nil {
+		s.logger.Error("xfx.handle_trade_execute.failed",
+			zap.String("client", cmd.ClientID),
+			zap.String("quote_id", cmd.QuoteID),
+			zap.Error(err))
+		return err
+	}
+
+	subject := "evt.trade." + trade.Status + ".v1.XFX"
+	if err := s.publisher.Publish(ctx, subject, trade); err != nil {
+		metrics.IncNATSPublishError(subject)
+		s.logger.Warn("xfx.handle_trade_execute.publish_failed",
+			zap.String("subject", subject),
+			zap.Error(err))
+	}
+
+	return nil
+}
+
+// PublishErrorEvent logs and optionally publishes a structured error event.
+func (s *Service) PublishErrorEvent(env model.Envelope, err error, code string, logError bool) {
+	if logError {
+		s.logger.Error("xfx.service_error",
+			zap.String("code", code),
+			zap.String("tenant_id", env.TenantID),
+			zap.String("client_id", env.ClientID),
+			zap.Error(err))
+	}
+}
+
 // Config returns the service configuration.
 func (s *Service) Config() config.Config {
 	return s.cfg
