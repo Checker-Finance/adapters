@@ -113,6 +113,21 @@ func (c *Client) GetTransaction(ctx context.Context, cfg *XFXClientConfig, txID 
 	return &resp, nil
 }
 
+// GetAccounts retrieves all customer accounts (balances) for the client.
+// GET /v1/customer/accounts
+func (c *Client) GetAccounts(ctx context.Context, cfg *XFXClientConfig) (*XFXAccountsResponse, error) {
+	const endpoint, method = "/v1/customer/accounts", http.MethodGet
+	start := time.Now()
+	var resp XFXAccountsResponse
+	err := c.getJSON(ctx, cfg, endpoint, &resp)
+	metrics.IncXFXRequest(endpoint, method, statusLabel(err))
+	metrics.ObserveDuration(metrics.XFXRequestDuration, start, endpoint, method)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 // statusLabel returns "ok" or "error" for use as a Prometheus label.
 func statusLabel(err error) string {
 	if err != nil {

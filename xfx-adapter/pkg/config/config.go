@@ -42,10 +42,12 @@ type Config struct {
 	// XFX-specific configuration
 	// Per-client config (client_id, client_secret, base_url) is resolved from
 	// AWS Secrets Manager at runtime. See internal/secrets/resolver.go.
-	XFXPollInterval       time.Duration // Polling interval for XFX transaction status
-	RFQSweepInterval      time.Duration // How often to expire stale RFQs/quotes in the legacy DB
-	RFQSweepTTL           time.Duration // Age threshold after which an open RFQ/quote is expired
+	XFXPollInterval        time.Duration // Polling interval for XFX transaction status
+	RFQSweepInterval       time.Duration // How often to expire stale RFQs/quotes in the legacy DB
+	RFQSweepTTL            time.Duration // Age threshold after which an open RFQ/quote is expired
 	SummaryRefreshInterval time.Duration // How often to refresh the balance summary materialized view
+	BalancePollInterval    time.Duration // How often to poll XFX account balances
+	ClientBalanceIDs       string        // Comma-separated list of client IDs for balance polling
 }
 
 // Load loads configuration from environment variables and optional .env file.
@@ -78,9 +80,11 @@ func Load() *Config {
 		PGMaxConnLifetime:   pkgconfig.GetEnvDuration("PG_MAX_CONN_LIFETIME", 30*time.Minute),
 		PGMaxConnIdleTime:   pkgconfig.GetEnvDuration("PG_MAX_CONN_IDLE_TIME", 5*time.Minute),
 		PGHealthCheckPeriod: pkgconfig.GetEnvDuration("PG_HEALTH_CHECK_PERIOD", 1*time.Minute),
-		XFXPollInterval:     pkgconfig.GetEnvDuration("XFX_POLL_INTERVAL", 15*time.Second),
+		XFXPollInterval:        pkgconfig.GetEnvDuration("XFX_POLL_INTERVAL", 15*time.Second),
 		RFQSweepInterval:       pkgconfig.GetEnvDuration("RFQ_SWEEP_INTERVAL", 5*time.Minute),
 		RFQSweepTTL:            pkgconfig.GetEnvDuration("RFQ_SWEEP_TTL", 15*time.Minute),
 		SummaryRefreshInterval: pkgconfig.GetEnvDuration("SUMMARY_REFRESH_INTERVAL", 24*time.Hour),
+		BalancePollInterval:    pkgconfig.GetEnvDuration("BALANCE_POLL_INTERVAL", 5*time.Minute),
+		ClientBalanceIDs:       pkgconfig.GetEnv("CLIENT_BALANCE_IDS", ""),
 	}
 }

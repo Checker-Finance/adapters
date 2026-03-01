@@ -154,6 +154,52 @@ func (p *Poller) PollTradeStatus(
 	}()
 }
 
+// StartBalancePolling starts periodic account-balance polling for the given client IDs.
+// It runs an immediate poll on startup and then on each tick of BalancePollInterval.
+func (p *Poller) StartBalancePolling(ctx context.Context, clients []string) {
+	if len(clients) == 0 {
+		return
+	}
+	p.logger.Info("xfx.balance_polling_started", zap.Int("clients", len(clients)))
+
+	for _, client := range clients {
+		if client == "" {
+			continue
+		}
+		go p.pollBalancesOnce(ctx, client)
+	}
+
+	ticker := time.NewTicker(p.cfg.BalancePollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			for _, client := range clients {
+				if client == "" {
+					continue
+				}
+				go p.pollBalancesOnce(ctx, client)
+			}
+		case <-ctx.Done():
+			p.logger.Info("xfx.balance_polling_stopped", zap.String("reason", "context_done"))
+			return
+		case <-p.stopCh:
+			p.logger.Info("xfx.balance_polling_stopped", zap.String("reason", "poller_shutdown"))
+			return
+		}
+	}
+}
+
+// pollBalancesOnce executes one balance poll cycle for a single client.
+func (p *Poller) pollBalancesOnce(ctx context.Context, clientID string) {
+	if err := p.service.FetchAndPublishBalances(ctx, clientID); err != nil {
+		p.logger.Warn("xfx.balance_poll_failed",
+			zap.String("client", clientID),
+			zap.Error(err))
+	}
+}
+
 // handleTerminalStatus processes a trade that has reached a terminal state.
 func (p *Poller) handleTerminalStatus(
 	ctx context.Context,
