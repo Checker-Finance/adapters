@@ -3,6 +3,7 @@ package xfx
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/Checker-Finance/adapters/pkg/model"
 	"github.com/nats-io/nats.go"
@@ -38,7 +39,9 @@ func (c *CommandConsumer) Subscribe(ctx context.Context, quoteSubject, tradeSubj
 				zap.Error(err))
 			return
 		}
-		if err := c.svc.HandleQuoteRequest(ctx, env, req); err != nil {
+		msgCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		if err := c.svc.HandleQuoteRequest(msgCtx, env, req); err != nil {
 			c.logger.Error("xfx.cmd.quote_request.handle_failed",
 				zap.String("client", env.ClientID),
 				zap.Error(err))
@@ -62,7 +65,9 @@ func (c *CommandConsumer) Subscribe(ctx context.Context, quoteSubject, tradeSubj
 				zap.Error(err))
 			return
 		}
-		if err := c.svc.HandleTradeExecute(ctx, env, cmd); err != nil {
+		msgCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if err := c.svc.HandleTradeExecute(msgCtx, env, cmd); err != nil {
 			c.logger.Error("xfx.cmd.trade_execute.handle_failed",
 				zap.String("client", env.ClientID),
 				zap.Error(err))

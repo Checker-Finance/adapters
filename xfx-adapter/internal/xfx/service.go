@@ -355,17 +355,6 @@ func (s *Service) HandleTradeExecute(ctx context.Context, env model.Envelope, cm
 	return nil
 }
 
-// PublishErrorEvent logs and optionally publishes a structured error event.
-func (s *Service) PublishErrorEvent(env model.Envelope, err error, code string, logError bool) {
-	if logError {
-		s.logger.Error("xfx.service_error",
-			zap.String("code", code),
-			zap.String("tenant_id", env.TenantID),
-			zap.String("client_id", env.ClientID),
-			zap.Error(err))
-	}
-}
-
 // Config returns the service configuration.
 func (s *Service) Config() config.Config {
 	return s.cfg
