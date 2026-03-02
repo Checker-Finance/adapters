@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: zodia-adapter
+  namespace: zodia-adapter
+spec:
+  selector:
+    app.kubernetes.io/name: zodia-adapter
+  ports:
+    - name: http
+      port: 9040
+      targetPort: http
+      protocol: TCP
+  type: ClusterIP

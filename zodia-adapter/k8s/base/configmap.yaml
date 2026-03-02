@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zodia-adapter-config
+  namespace: zodia-adapter
+data:
+  SERVICE_NAME: "zodia-adapter"
+  ENV: "base"
+  LOG_LEVEL: "info"
+  ZODIA_PORT: "9040"
+  ZODIA_POLL_INTERVAL: "15s"
+  WS_REQUEST_TIMEOUT: "10s"
+  WS_MAX_RETRIES: "5"
+  CACHE_TTL: "24h"
+  CACHE_CLEANUP_FREQ: "10m"
+  INBOUND_SUBJECT: "cmd.lp.quote_request.v1.ZODIA"
+  OUTBOUND_SUBJECT: "evt.lp.quote_response.v1.ZODIA"
+  TRADE_EXECUTE_SUBJECT: "cmd.lp.trade_execute.v1.ZODIA"
+  REDIS_DB: "0"
+  AWS_REGION: "us-east-2"

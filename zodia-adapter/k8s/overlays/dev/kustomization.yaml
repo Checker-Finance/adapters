@@ -1,0 +1,51 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: zodia-adapter-dev
+
+resources:
+  - ../../base
+  - secretstore.yaml
+  - externalsecret.yaml
+
+namePrefix: dev-
+
+images:
+  - name: zodia-adapter
+    newName: 730335471935.dkr.ecr.us-east-2.amazonaws.com/zodia-adapter
+    newTag: dev
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: zodia-adapter-dev
+    target:
+      kind: Namespace
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: zodia-adapter
+  - target:
+      kind: ConfigMap
+      name: zodia-adapter-config
+    patch: |-
+      - op: replace
+        path: /data/ENV
+        value: dev
+      - op: replace
+        path: /data/LOG_LEVEL
+        value: debug
+      - op: replace
+        path: /data/ZODIA_POLL_INTERVAL
+        value: 15s
+  - patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: zodia-dev.checker.finance
+    target:
+      kind: Ingress
+      name: zodia-adapter
