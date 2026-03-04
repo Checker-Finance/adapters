@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: b2c2-adapter-config
+  namespace: b2c2-adapter
+data:
+  ENV: "prod"
+  AWS_REGION: "us-east-2"
+  LOG_LEVEL: "info"
+  HEALTH_PORT: "9050"
+  B2C2_DEFAULT_BASE_URL: "https://api.b2c2.net"
+  CACHE_TTL: "30m"
+  CACHE_CLEANUP_FREQ: "10m"

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: b2c2-adapter
+  namespace: b2c2-adapter
+spec:
+  selector:
+    app.kubernetes.io/name: b2c2-adapter
+  ports:
+    - name: health
+      port: 9050
+      targetPort: health
+      protocol: TCP
+  type: ClusterIP
