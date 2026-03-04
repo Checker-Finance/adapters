@@ -10,23 +10,6 @@ import (
 	"github.com/Checker-Finance/adapters/b2c2-adapter/internal/b2c2"
 )
 
-// ─── Mock Client ──────────────────────────────────────────────────────────────
-
-type mockClient struct {
-	rfqResp   *b2c2.RFQResponse
-	rfqErr    error
-	orderResp *b2c2.OrderResponse
-	orderErr  error
-}
-
-func (m *mockClient) RequestQuote(_ context.Context, _ *b2c2.B2C2ClientConfig, _ *b2c2.RFQRequest) (*b2c2.RFQResponse, error) {
-	return m.rfqResp, m.rfqErr
-}
-
-func (m *mockClient) ExecuteOrder(_ context.Context, _ *b2c2.B2C2ClientConfig, _ *b2c2.OrderRequest) (*b2c2.OrderResponse, error) {
-	return m.orderResp, m.orderErr
-}
-
 // ─── Mock Resolver ────────────────────────────────────────────────────────────
 
 type mockResolver struct {
@@ -74,12 +57,6 @@ func (m *mockPublisher) PublishCancelEvent(_ context.Context, e *b2c2.OrderCance
 	m.cancelEvents = append(m.cancelEvents, e)
 	return nil
 }
-
-// ─── ServiceClient adapts mockClient to the service ──────────────────────────
-
-// b2c2.Service accepts *b2c2.Client, not an interface. To keep things simple in
-// tests we test the service via integration with mapper helpers, and verify the
-// correct publish method is invoked using the mock publisher.
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
