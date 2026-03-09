@@ -15,7 +15,7 @@ import (
 // AWSResolver resolves per-client XFX configuration from AWS Secrets Manager.
 // It is a thin wrapper over the generic intsecrets.AWSResolver[xfx.XFXClientConfig].
 //
-// Secret naming convention: {env}/xfx/{clientID}
+// Secret naming convention: {env}/{clientID}/xfx
 // Secret JSON format:       {"client_id": "...", "client_secret": "...", "base_url": "https://api.xfx.io"}
 type AWSResolver struct {
 	inner *intsecrets.AWSResolver[xfx.XFXClientConfig]
