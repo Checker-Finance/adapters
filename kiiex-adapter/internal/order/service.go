@@ -2,6 +2,7 @@ package order
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -20,10 +21,16 @@ type ConfigResolver interface {
 	Resolve(ctx context.Context, clientID string) (*security.Auth, error)
 }
 
+// sessionEntry pairs an AlphaPoint session with the credentials used to create it.
+type sessionEntry struct {
+	session *alphapoint.Session
+	auth    *security.Auth
+}
+
 // Service handles order operations
 type Service struct {
 	mu               sync.RWMutex
-	sessions         map[string]*alphapoint.Session
+	sessions         map[string]sessionEntry
 	resolver         ConfigResolver
 	instrumentMaster *instruments.Master
 	eventBus         *eventbus.EventBus
@@ -40,7 +47,7 @@ func NewService(
 	logger *zap.Logger,
 ) *Service {
 	return &Service{
-		sessions:         make(map[string]*alphapoint.Session),
+		sessions:         make(map[string]sessionEntry),
 		resolver:         resolver,
 		instrumentMaster: instrumentMaster,
 		eventBus:         eventBus,
@@ -49,27 +56,33 @@ func NewService(
 	}
 }
 
-// getOrCreateSession returns an existing session for clientID or creates and connects a new one.
-func (s *Service) getOrCreateSession(ctx context.Context, clientID string, auth *security.Auth) (*alphapoint.Session, error) {
+// getOrCreateSession returns an existing session entry for clientID or creates and connects a new one.
+// Auth is resolved from the secret store only when a new session needs to be created.
+func (s *Service) getOrCreateSession(ctx context.Context, clientID string) (sessionEntry, error) {
 	s.mu.RLock()
-	sess, ok := s.sessions[clientID]
+	entry, ok := s.sessions[clientID]
 	s.mu.RUnlock()
 	if ok {
-		return sess, nil
+		return entry, nil
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if sess, ok = s.sessions[clientID]; ok {
-		return sess, nil
+	if entry, ok = s.sessions[clientID]; ok {
+		return entry, nil
+	}
+
+	auth, err := s.resolver.Resolve(ctx, clientID)
+	if err != nil {
+		return sessionEntry{}, fmt.Errorf("resolve credentials for client %q: %w", clientID, err)
 	}
 
 	client := alphapoint.NewClient(s.wsURL, s.logger)
 	if err := client.Connect(ctx); err != nil {
-		return nil, fmt.Errorf("connect to AlphaPoint for client %q: %w", clientID, err)
+		return sessionEntry{}, fmt.Errorf("connect to AlphaPoint for client %q: %w", clientID, err)
 	}
 
-	sess = alphapoint.NewSession(client, s.logger)
+	sess := alphapoint.NewSession(client, s.logger)
 	sess.SetAuth(&alphapoint.AuthenticateUserRequest{
 		APIKey:    auth.APIKey,
 		Signature: auth.Signature,
@@ -80,18 +93,19 @@ func (s *Service) getOrCreateSession(ctx context.Context, clientID string, auth 
 	sess.RegisterHandler("cancelorder", s.handleCancelOrderResponse)
 	sess.RegisterHandler("getorderstatus", s.handleGetOrderStatusResponse)
 
-	s.sessions[clientID] = sess
+	entry = sessionEntry{session: sess, auth: auth}
+	s.sessions[clientID] = entry
 	s.logger.Info("AlphaPoint session created", zap.String("clientID", clientID))
-	return sess, nil
+	return entry, nil
 }
 
 // ExecuteOrder submits an order to AlphaPoint for the client identified in the command.
 func (s *Service) ExecuteOrder(ctx context.Context, cmd *SubmitOrderCommand) error {
 	s.logger.Info("SubmitOrderCommand received", zap.Any("command", cmd))
 
-	auth, err := s.resolver.Resolve(ctx, cmd.ClientID)
+	entry, err := s.getOrCreateSession(ctx, cmd.ClientID)
 	if err != nil {
-		return fmt.Errorf("resolve credentials for client %q: %w", cmd.ClientID, err)
+		return err
 	}
 
 	instrumentID, ok := s.instrumentMaster.GetInstrumentID(cmd.InstrumentPair)
@@ -101,14 +115,14 @@ func (s *Service) ExecuteOrder(ctx context.Context, cmd *SubmitOrderCommand) err
 
 	tradeInfo := TradeInfo{
 		ClientID:  cmd.ClientID,
-		OmsID:     auth.OmsID,
-		AccountID: auth.AccountID,
+		OmsID:     entry.auth.OmsID,
+		AccountID: entry.auth.AccountID,
 		OrderID:   int(cmd.ID),
 	}
 
 	orderReq := &alphapoint.SendOrderRequest{
-		OmsID:              auth.OmsID,
-		AccountID:          auth.AccountID,
+		OmsID:              entry.auth.OmsID,
+		AccountID:          entry.auth.AccountID,
 		ClientOrderID:      int(cmd.ID),
 		InstrumentID:       instrumentID,
 		Quantity:           cmd.Quantity.InexactFloat64(),
@@ -118,8 +132,13 @@ func (s *Service) ExecuteOrder(ctx context.Context, cmd *SubmitOrderCommand) err
 		TimeInForce:        TimeInForceFOK.ToInt(),
 	}
 
-	sess, err := s.getOrCreateSession(ctx, cmd.ClientID, auth)
-	if err != nil {
+	if err := entry.session.Login(ctx); err != nil {
+		s.logger.Error("Failed to login", zap.Error(err))
+		return err
+	}
+
+	if err := entry.session.ExecuteOrder(ctx, orderReq); err != nil {
+		s.logger.Error("Failed to execute order", zap.Error(err))
 		return err
 	}
 
@@ -128,16 +147,6 @@ func (s *Service) ExecuteOrder(ctx context.Context, cmd *SubmitOrderCommand) err
 		OrderID:   cmd.ClientOrderID,
 	})
 
-	if err := sess.Login(ctx); err != nil {
-		s.logger.Error("Failed to login", zap.Error(err))
-		return err
-	}
-
-	if err := sess.ExecuteOrder(ctx, orderReq); err != nil {
-		s.logger.Error("Failed to execute order", zap.Error(err))
-		return err
-	}
-
 	return nil
 }
 
@@ -145,40 +154,35 @@ func (s *Service) ExecuteOrder(ctx context.Context, cmd *SubmitOrderCommand) err
 func (s *Service) CancelOrder(ctx context.Context, clientID, orderID string) error {
 	s.logger.Info("CancelOrder", zap.String("clientID", clientID), zap.String("orderId", orderID))
 
-	auth, err := s.resolver.Resolve(ctx, clientID)
-	if err != nil {
-		return fmt.Errorf("resolve credentials for client %q: %w", clientID, err)
-	}
-
 	orderIDInt, err := strconv.Atoi(orderID)
 	if err != nil {
 		return fmt.Errorf("invalid order ID: %w", err)
 	}
 
+	entry, err := s.getOrCreateSession(ctx, clientID)
+	if err != nil {
+		return err
+	}
+
 	cancel := &alphapoint.CancelOrderRequest{
-		OmsID:     auth.OmsID,
-		AccountID: auth.AccountID,
+		OmsID:     entry.auth.OmsID,
+		AccountID: entry.auth.AccountID,
 		OrderID:   orderIDInt,
 	}
 
-	sess, err := s.getOrCreateSession(ctx, clientID, auth)
-	if err != nil {
+	if err := entry.session.Login(ctx); err != nil {
+		s.logger.Error("Failed to login", zap.Error(err))
+		return err
+	}
+
+	if err := entry.session.CancelOrder(ctx, cancel); err != nil {
+		s.logger.Error("Failed to cancel order", zap.Error(err))
 		return err
 	}
 
 	s.eventBus.Publish(&OrderCanceledEvent{
 		OrderID: orderID,
 	})
-
-	if err := sess.Login(ctx); err != nil {
-		s.logger.Error("Failed to login", zap.Error(err))
-		return err
-	}
-
-	if err := sess.CancelOrder(ctx, cancel); err != nil {
-		s.logger.Error("Failed to cancel order", zap.Error(err))
-		return err
-	}
 
 	return nil
 }
@@ -187,12 +191,7 @@ func (s *Service) CancelOrder(ctx context.Context, clientID, orderID string) err
 func (s *Service) GetTradeStatus(ctx context.Context, tradeInfo TradeInfo) error {
 	s.logger.Info("GetTradeStatus", zap.Any("tradeInfo", tradeInfo))
 
-	auth, err := s.resolver.Resolve(ctx, tradeInfo.ClientID)
-	if err != nil {
-		return fmt.Errorf("resolve credentials for client %q: %w", tradeInfo.ClientID, err)
-	}
-
-	sess, err := s.getOrCreateSession(ctx, tradeInfo.ClientID, auth)
+	entry, err := s.getOrCreateSession(ctx, tradeInfo.ClientID)
 	if err != nil {
 		return err
 	}
@@ -203,7 +202,7 @@ func (s *Service) GetTradeStatus(ctx context.Context, tradeInfo TradeInfo) error
 		OrderID:   tradeInfo.OrderID,
 	}
 
-	return sess.GetOrderStatus(ctx, request)
+	return entry.session.GetOrderStatus(ctx, request)
 }
 
 // Close closes all per-client AlphaPoint sessions.
@@ -211,14 +210,14 @@ func (s *Service) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var lastErr error
-	for clientID, sess := range s.sessions {
-		if err := sess.Close(); err != nil {
+	var errs []error
+	for clientID, entry := range s.sessions {
+		if err := entry.session.Close(); err != nil {
 			s.logger.Error("failed to close session", zap.String("clientID", clientID), zap.Error(err))
-			lastErr = err
+			errs = append(errs, fmt.Errorf("close session %q: %w", clientID, err))
 		}
 	}
-	return lastErr
+	return errors.Join(errs...)
 }
 
 func (s *Service) handleSendOrderResponse(response *alphapoint.Response) {
