@@ -29,7 +29,8 @@ type SubmitOrderCommand struct {
 
 // CancelOrderCommand represents an order cancellation request from RabbitMQ
 type CancelOrderCommand struct {
-	OrderID string `json:"orderId"`
+	OrderID  string `json:"orderId"`
+	ClientID string `json:"clientId,omitempty"`
 }
 
 // AmendOrderCommand represents an order amendment request

@@ -24,7 +24,7 @@ type Consumer struct {
 // OrderService defines the order service interface
 type OrderService interface {
 	ExecuteOrder(ctx context.Context, cmd *order.SubmitOrderCommand) error
-	CancelOrder(ctx context.Context, orderID string) error
+	CancelOrder(ctx context.Context, clientID, orderID string) error
 }
 
 // NewConsumer creates a new RabbitMQ consumer
@@ -143,7 +143,7 @@ func (c *Consumer) consumeCanceledOrders(ctx context.Context, msgs <-chan amqp.D
 				continue
 			}
 
-			if err := c.orderService.CancelOrder(ctx, cmd.OrderID); err != nil {
+			if err := c.orderService.CancelOrder(ctx, cmd.ClientID, cmd.OrderID); err != nil {
 				c.logger.Error("Failed to cancel order", zap.Error(err))
 				_ = msg.Nack(false, true) // Requeue on failure
 				continue

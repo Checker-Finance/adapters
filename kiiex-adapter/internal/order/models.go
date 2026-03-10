@@ -2,9 +2,10 @@ package order
 
 // TradeInfo contains AlphaPoint trade identifiers
 type TradeInfo struct {
-	OmsID     int `json:"omsId"`
-	AccountID int `json:"accountId"`
-	OrderID   int `json:"orderId"`
+	ClientID  string `json:"clientId"`
+	OmsID     int    `json:"omsId"`
+	AccountID int    `json:"accountId"`
+	OrderID   int    `json:"orderId"`
 }
 
 // Side represents the order side (Buy/Sell)

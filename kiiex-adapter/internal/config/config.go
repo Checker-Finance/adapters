@@ -1,6 +1,8 @@
 package config
 
 import (
+	"time"
+
 	pkgconfig "github.com/Checker-Finance/adapters/pkg/config"
 )
 
@@ -11,7 +13,8 @@ type Config struct {
 	RabbitMQURL       string
 	Provider          string
 	AWSRegion         string
-	AWSSecretName     string
+	Env               string
+	CacheTTL          time.Duration
 	Profile           string
 	LogLevel          string
 	CheckerIssuer     string
@@ -26,7 +29,8 @@ func Load() *Config {
 		RabbitMQURL:       pkgconfig.GetEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
 		Provider:          pkgconfig.GetEnv("CHECKER_OTC_ADAPTER_PROVIDER", "kiiex"),
 		AWSRegion:         pkgconfig.GetEnv("AWS_REGION", "us-east-2"),
-		AWSSecretName:     pkgconfig.GetEnv("AWS_SECRET_NAME", ""),
+		Env:               pkgconfig.GetEnv("ENV", "dev"),
+		CacheTTL:          pkgconfig.GetEnvDuration("CACHE_TTL", 24*time.Hour),
 		Profile:           pkgconfig.GetEnv("SPRING_PROFILES_ACTIVE", ""),
 		LogLevel:          pkgconfig.GetEnv("LOG_LEVEL", "info"),
 		CheckerIssuer:     pkgconfig.GetEnv("CHECKER_ISSUER", ""),
