@@ -15,9 +15,7 @@ type Config struct {
 	Venue       string
 	DatabaseURL string
 	NATSURL     string
-	RedisAddr   string
-	RedisDB     int
-	RedisPass   string
+	RedisURL    string // e.g. redis://localhost:6379 or redis://:pass@host:6379/1
 	AWSRegion   string
 	LogLevel    string
 	Port        int
@@ -63,9 +61,7 @@ func Load() *Config {
 		Env:                 pkgconfig.GetEnv("ENV", "dev"),
 		DatabaseURL:         pkgconfig.GetEnv("DATABASE_URL", "postgres://checker:checker@localhost/db_checker?sslmode=disable"),
 		NATSURL:             pkgconfig.GetEnv("NATS_URL", "nats://localhost:4222"),
-		RedisAddr:           pkgconfig.GetEnv("REDIS_ADDR", "localhost:6379"),
-		RedisDB:             pkgconfig.GetEnvInt("REDIS_DB", 0),
-		RedisPass:           pkgconfig.GetEnv("REDIS_PASS", ""),
+		RedisURL:            pkgconfig.GetEnv("REDIS_URL", "redis://localhost:6379"),
 		AWSRegion:           pkgconfig.GetEnv("AWS_REGION", "us-east-2"),
 		LogLevel:            pkgconfig.GetEnv("LOG_LEVEL", "info"),
 		Port:                pkgconfig.GetEnvInt("ZODIA_PORT", 9040),

@@ -15,7 +15,7 @@ import (
 const (
 	// auth0TokenEndpoint is the Auth0 token URL for XFX.
 	auth0TokenEndpoint = "https://dev-er8o7vv4aka08m70.us.auth0.com/oauth/token"
-	// auth0Audience is the audience for XFX API tokens.
+	// auth0Audience is the Auth0 API identifier for XFX — fixed regardless of environment.
 	auth0Audience = "https://api.xfx.io/trading"
 	// tokenExpiryBuffer is the margin before actual expiry at which we pre-fetch a new token.
 	tokenExpiryBuffer = 5 * time.Minute

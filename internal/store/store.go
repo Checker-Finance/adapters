@@ -47,17 +47,19 @@ type PGPoolConfig struct {
 }
 
 // NewHybrid creates a Redis-first, Postgres-backed store.
-func NewHybrid(redisAddr string, redisDB int, pgURL string, pgPoolConfig PGPoolConfig, logger *zap.Logger) (Store, error) {
+// redisURL must be a valid Redis URL, e.g. redis://localhost:6379 or redis://:password@host:6379/1
+func NewHybrid(redisURL string, pgURL string, pgPoolConfig PGPoolConfig, logger *zap.Logger) (Store, error) {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr: redisAddr,
-		DB:   redisDB,
-	})
+	opts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid redis URL: %w", err)
+	}
+	rdb := redis.NewClient(opts)
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		return nil, fmt.Errorf("redis ping failed: %w", err)
 	}

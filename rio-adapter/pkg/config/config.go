@@ -17,9 +17,7 @@ type Config struct {
 	DatabaseURL  string
 	PollInterval time.Duration
 	NATSURL      string // e.g. nats://localhost:4222
-	RedisAddr    string // e.g. localhost:6379
-	RedisDB      int
-	RedisPass    string
+	RedisURL     string // e.g. redis://localhost:6379 or redis://:pass@host:6379/1
 	AWSRegion    string // for AWS SDK client
 	LogLevel     string // "debug", "info", etc.
 	Port         int    // service HTTP or metrics port
@@ -66,9 +64,7 @@ func Load() *Config {
 		DatabaseURL:         pkgconfig.GetEnv("DATABASE_URL", "postgres://checker:checker@localhost/db_checker?sslmode=disable"),
 		PollInterval:        pkgconfig.GetEnvDuration("POLL_INTERVAL", 5*time.Minute),
 		NATSURL:             pkgconfig.GetEnv("NATS_URL", "nats://localhost:4222"),
-		RedisAddr:           pkgconfig.GetEnv("REDIS_ADDR", "localhost:6379"),
-		RedisDB:             pkgconfig.GetEnvInt("REDIS_DB", 0),
-		RedisPass:           pkgconfig.GetEnv("REDIS_PASS", ""),
+		RedisURL:            pkgconfig.GetEnv("REDIS_URL", "redis://localhost:6379"),
 		AWSRegion:           pkgconfig.GetEnv("AWS_REGION", "us-east-2"),
 		LogLevel:            pkgconfig.GetEnv("LOG_LEVEL", "info"),
 		Port:                pkgconfig.GetEnvInt("RIO_PORT", 9010),

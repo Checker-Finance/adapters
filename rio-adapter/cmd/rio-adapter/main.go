@@ -83,7 +83,7 @@ func main() {
 	})
 
 	// --- Store (Redis + Postgres hybrid) ---
-	st, err := store.NewHybrid(cfg.RedisAddr, cfg.RedisDB, cfg.DatabaseURL, store.PGPoolConfig{
+	st, err := store.NewHybrid(cfg.RedisURL, cfg.DatabaseURL, store.PGPoolConfig{
 		MaxConns:          int32(cfg.PGMaxConns),
 		MinConns:          int32(cfg.PGMinConns),
 		MaxConnLifetime:   cfg.PGMaxConnLifetime,

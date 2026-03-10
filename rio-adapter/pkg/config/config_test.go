@@ -11,7 +11,7 @@ func TestLoad_Defaults(t *testing.T) {
 	// Clear any env vars that would override defaults
 	envVars := []string{
 		"SERVICE_NAME", "ENV", "DATABASE_URL", "POLL_INTERVAL",
-		"NATS_URL", "REDIS_ADDR", "REDIS_DB", "AWS_REGION",
+		"NATS_URL", "REDIS_URL", "AWS_REGION",
 		"LOG_LEVEL", "RIO_PORT",
 		"RIO_POLL_INTERVAL", "PG_MAX_CONNS",
 		"HTTP_READ_TIMEOUT", "HTTP_BODY_LIMIT",
@@ -31,11 +31,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.NATSURL != "nats://localhost:4222" {
 		t.Errorf("expected NATSURL=nats://localhost:4222, got %s", cfg.NATSURL)
 	}
-	if cfg.RedisAddr != "localhost:6379" {
-		t.Errorf("expected RedisAddr=localhost:6379, got %s", cfg.RedisAddr)
-	}
-	if cfg.RedisDB != 0 {
-		t.Errorf("expected RedisDB=0, got %d", cfg.RedisDB)
+	if cfg.RedisURL != "redis://localhost:6379" {
+		t.Errorf("expected RedisURL=redis://localhost:6379, got %s", cfg.RedisURL)
 	}
 	if cfg.Port != 9010 {
 		t.Errorf("expected Port=9010, got %d", cfg.Port)
@@ -70,8 +67,7 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	t.Setenv("SERVICE_NAME", "test-service")
 	t.Setenv("ENV", "prod")
 	t.Setenv("NATS_URL", "nats://nats:4222")
-	t.Setenv("REDIS_ADDR", "redis:6379")
-	t.Setenv("REDIS_DB", "5")
+	t.Setenv("REDIS_URL", "redis://redis:6379/5")
 	t.Setenv("RIO_PORT", "8080")
 	t.Setenv("LOG_LEVEL", "debug")
 	t.Setenv("POLL_INTERVAL", "10m")
@@ -93,11 +89,8 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	if cfg.NATSURL != "nats://nats:4222" {
 		t.Errorf("expected NATSURL=nats://nats:4222, got %s", cfg.NATSURL)
 	}
-	if cfg.RedisAddr != "redis:6379" {
-		t.Errorf("expected RedisAddr=redis:6379, got %s", cfg.RedisAddr)
-	}
-	if cfg.RedisDB != 5 {
-		t.Errorf("expected RedisDB=5, got %d", cfg.RedisDB)
+	if cfg.RedisURL != "redis://redis:6379/5" {
+		t.Errorf("expected RedisURL=redis://redis:6379/5, got %s", cfg.RedisURL)
 	}
 	if cfg.Port != 8080 {
 		t.Errorf("expected Port=8080, got %d", cfg.Port)

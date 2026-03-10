@@ -153,7 +153,7 @@ func TestNewTestStoreWithLogger(t *testing.T) {
 	defer mr.Close()
 
 	// nil logger should default to zap.NewNop
-	st, err := NewHybrid(mr.Addr(), 0, "", PGPoolConfig{}, nil)
+	st, err := NewHybrid("redis://"+mr.Addr(), "", PGPoolConfig{}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, st)
 
@@ -166,7 +166,7 @@ func TestNewHybrid_WithExplicitLogger(t *testing.T) {
 	require.NoError(t, err)
 	defer mr.Close()
 
-	st, err := NewHybrid(mr.Addr(), 0, "", PGPoolConfig{}, zap.NewNop())
+	st, err := NewHybrid("redis://"+mr.Addr(), "", PGPoolConfig{}, zap.NewNop())
 	require.NoError(t, err)
 	require.NotNil(t, st)
 
@@ -175,7 +175,7 @@ func TestNewHybrid_WithExplicitLogger(t *testing.T) {
 }
 
 func TestNewHybrid_InvalidRedis(t *testing.T) {
-	_, err := NewHybrid("localhost:1", 0, "", PGPoolConfig{}, nil)
+	_, err := NewHybrid("redis://localhost:1", "", PGPoolConfig{}, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "redis ping failed")
 }
@@ -185,6 +185,6 @@ func TestNewHybrid_InvalidPGURL(t *testing.T) {
 	require.NoError(t, err)
 	defer mr.Close()
 
-	_, err = NewHybrid(mr.Addr(), 0, "not-a-valid-pg-url", PGPoolConfig{}, nil)
+	_, err = NewHybrid("redis://"+mr.Addr(), "not-a-valid-pg-url", PGPoolConfig{}, nil)
 	assert.Error(t, err)
 }

@@ -82,7 +82,7 @@ func main() {
 	})
 
 	// --- Store (Redis + Postgres hybrid) ---
-	st, err := store.NewHybrid(cfg.RedisAddr, cfg.RedisDB, cfg.DatabaseURL, store.PGPoolConfig{}, logg.Desugar())
+	st, err := store.NewHybrid(cfg.RedisURL, cfg.DatabaseURL, store.PGPoolConfig{}, logg.Desugar())
 	if err != nil {
 		logg.Fatalw("failed to init store", "error", err)
 	}
