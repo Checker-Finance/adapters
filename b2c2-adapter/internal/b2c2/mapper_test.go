@@ -161,6 +161,21 @@ func TestFromOrderResponseCanceled(t *testing.T) {
 	if event.Provider != "b2c2" {
 		t.Errorf("expected provider b2c2, got %s", event.Provider)
 	}
+	if event.ClientID != "client-1" {
+		t.Errorf("expected clientId client-1, got %s", event.ClientID)
+	}
+	if event.InstrumentPair != "usd:btc" {
+		t.Errorf("expected instrumentPair usd:btc, got %s", event.InstrumentPair)
+	}
+	if event.Side != "BUY" {
+		t.Errorf("expected side BUY, got %s", event.Side)
+	}
+	if event.Quantity != "1000000" {
+		t.Errorf("expected quantity 1000000, got %s", event.Quantity)
+	}
+	if event.QuotedPrice != "0.00003123" {
+		t.Errorf("expected quotedPrice 0.00003123, got %s", event.QuotedPrice)
+	}
 }
 
 func TestToOrderRequest(t *testing.T) {

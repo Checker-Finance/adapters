@@ -106,5 +106,10 @@ func FromOrderResponseCanceled(resp *OrderResponse, cmd *SubmitOrderCommand) *Or
 		RequestForQuoteID: cmd.RequestForQuoteID,
 		Provider:          "b2c2",
 		Reason:            "no_liquidity",
+		ClientID:          cmd.ClientID,
+		InstrumentPair:    cmd.InstrumentPair,
+		Side:              cmd.Side,
+		Quantity:          cmd.Quantity,
+		QuotedPrice:       cmd.Price,
 	}
 }

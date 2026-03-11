@@ -203,6 +203,11 @@ type OrderCanceledEvent struct {
 	RequestForQuoteID string `json:"requestForQuoteId"`
 	Provider          string `json:"provider"`
 	Reason            string `json:"reason"`
+	ClientID          string `json:"clientId"`
+	InstrumentPair    string `json:"instrumentPair"`
+	Side              string `json:"side"`
+	Quantity          string `json:"quantity"`
+	QuotedPrice       string `json:"quotedPrice"`
 }
 
 //

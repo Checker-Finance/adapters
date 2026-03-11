@@ -178,6 +178,21 @@ func TestHandleOrderCommand_NoLiquidity(t *testing.T) {
 	if pub.cancelEvents[0].Reason != "no_liquidity" {
 		t.Errorf("expected reason no_liquidity, got %s", pub.cancelEvents[0].Reason)
 	}
+	if pub.cancelEvents[0].ClientID != "client-1" {
+		t.Errorf("expected clientId client-1, got %s", pub.cancelEvents[0].ClientID)
+	}
+	if pub.cancelEvents[0].InstrumentPair != "usd:btc" {
+		t.Errorf("expected instrumentPair usd:btc, got %s", pub.cancelEvents[0].InstrumentPair)
+	}
+	if pub.cancelEvents[0].Side != "BUY" {
+		t.Errorf("expected side BUY, got %s", pub.cancelEvents[0].Side)
+	}
+	if pub.cancelEvents[0].Quantity != "1000000" {
+		t.Errorf("expected quantity 1000000, got %s", pub.cancelEvents[0].Quantity)
+	}
+	if pub.cancelEvents[0].QuotedPrice != "0.00003" {
+		t.Errorf("expected quotedPrice 0.00003, got %s", pub.cancelEvents[0].QuotedPrice)
+	}
 }
 
 func TestPublisherError(t *testing.T) {
