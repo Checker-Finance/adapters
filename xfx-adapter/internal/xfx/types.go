@@ -4,19 +4,6 @@ import "context"
 
 //
 // ────────────────────────────────────────────────
-//   Service Configuration (service-level, from AWS SM)
-// ────────────────────────────────────────────────
-//
-
-// XFXServiceConfig holds service-wide XFX configuration resolved from AWS Secrets Manager.
-// Secret path: {env}/xfx-adapter → {"auth0_endpoint": "...", "auth0_audience": "..."}
-type XFXServiceConfig struct {
-	Auth0Endpoint string // Auth0 token URL
-	Auth0Audience string // Auth0 API identifier
-}
-
-//
-// ────────────────────────────────────────────────
 //   Client Configuration (per-client, from AWS SM)
 // ────────────────────────────────────────────────
 //

@@ -31,6 +31,12 @@ patches:
       - op: replace
         path: /data/LOG_LEVEL
         value: info
+      - op: replace
+        path: /data/AUTH0_ENDPOINT
+        value: https://REPLACE_WITH_PROD_AUTH0_ENDPOINT
+      - op: replace
+        path: /data/AUTH0_AUDIENCE
+        value: https://REPLACE_WITH_PROD_AUTH0_AUDIENCE
   - patch: |-
       - op: replace
         path: /spec/rules/0/host

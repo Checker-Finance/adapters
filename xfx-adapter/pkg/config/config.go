@@ -38,6 +38,10 @@ type Config struct {
 	PGMaxConnIdleTime   time.Duration
 	PGHealthCheckPeriod time.Duration
 
+	// Auth0 service-level config (injected via ExternalSecret from {env}/xfx-adapter)
+	Auth0Endpoint string // Auth0 token endpoint URL
+	Auth0Audience string // Auth0 API audience identifier
+
 	// XFX-specific configuration
 	// Per-client config (client_id, client_secret, base_url) is resolved from
 	// AWS Secrets Manager at runtime. See internal/secrets/resolver.go.
@@ -78,6 +82,8 @@ func Load() *Config {
 		PGMaxConnLifetime:   pkgconfig.GetEnvDuration("PG_MAX_CONN_LIFETIME", 30*time.Minute),
 		PGMaxConnIdleTime:   pkgconfig.GetEnvDuration("PG_MAX_CONN_IDLE_TIME", 5*time.Minute),
 		PGHealthCheckPeriod: pkgconfig.GetEnvDuration("PG_HEALTH_CHECK_PERIOD", 1*time.Minute),
+		Auth0Endpoint:          pkgconfig.GetEnv("AUTH0_ENDPOINT", ""),
+		Auth0Audience:          pkgconfig.GetEnv("AUTH0_AUDIENCE", ""),
 		XFXPollInterval:        pkgconfig.GetEnvDuration("XFX_POLL_INTERVAL", 15*time.Second),
 		RFQSweepInterval:       pkgconfig.GetEnvDuration("RFQ_SWEEP_INTERVAL", 5*time.Minute),
 		RFQSweepTTL:            pkgconfig.GetEnvDuration("RFQ_SWEEP_TTL", 15*time.Minute),

@@ -45,6 +45,12 @@ patches:
       - op: add
         path: /data/CLIENT_BALANCE_IDS
         value: f8027b8b-86f2-44e0-b0ac-72a787699a2b
+      - op: replace
+        path: /data/AUTH0_ENDPOINT
+        value: https://dev-er8o7vv4aka08m70.us.auth0.com/oauth/token
+      - op: replace
+        path: /data/AUTH0_AUDIENCE
+        value: https://dev.xfx.io
   - patch: |-
       - op: replace
         path: /spec/rules/0/host
