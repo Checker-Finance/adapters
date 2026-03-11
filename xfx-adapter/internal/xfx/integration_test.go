@@ -14,37 +14,39 @@ import (
 )
 
 // newIntegrationConfig returns an XFXClientConfig from environment variables.
-// Skips the test if XFX_CLIENT_ID, XFX_CLIENT_SECRET, or XFX_BASE_URL are not set.
-func newIntegrationConfig(t *testing.T) *XFXClientConfig {
+// Skips the test if required env vars are not set.
+func newIntegrationConfig(t *testing.T) (*XFXClientConfig, string, string) {
 	t.Helper()
 
 	clientID := os.Getenv("XFX_CLIENT_ID")
 	clientSecret := os.Getenv("XFX_CLIENT_SECRET")
 	baseURL := os.Getenv("XFX_BASE_URL")
-	if clientID == "" || clientSecret == "" || baseURL == "" {
-		t.Skip("XFX_CLIENT_ID, XFX_CLIENT_SECRET, and XFX_BASE_URL must be set for integration tests")
+	auth0Endpoint := os.Getenv("XFX_AUTH0_ENDPOINT")
+	auth0Audience := os.Getenv("XFX_AUTH0_AUDIENCE")
+	if clientID == "" || clientSecret == "" || baseURL == "" || auth0Endpoint == "" || auth0Audience == "" {
+		t.Skip("XFX_CLIENT_ID, XFX_CLIENT_SECRET, XFX_BASE_URL, XFX_AUTH0_ENDPOINT, and XFX_AUTH0_AUDIENCE must be set for integration tests")
 	}
 
 	return &XFXClientConfig{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		BaseURL:      baseURL,
-	}
+	}, auth0Endpoint, auth0Audience
 }
 
 func newIntegrationClient(t *testing.T) (*Client, *XFXClientConfig) {
 	t.Helper()
-	cfg := newIntegrationConfig(t)
+	cfg, endpoint, audience := newIntegrationConfig(t)
 	logger, _ := zap.NewDevelopment()
-	tokens := NewTokenManager(logger)
+	tokens := NewTokenManager(logger, endpoint, audience)
 	return NewClient(logger, rate.NewManager(rate.Config{RequestsPerSecond: 10, Burst: 20}), tokens), cfg
 }
 
 // TestIntegration_Auth verifies that Auth0 client credentials flow succeeds.
 func TestIntegration_Auth(t *testing.T) {
-	cfg := newIntegrationConfig(t)
+	cfg, endpoint, audience := newIntegrationConfig(t)
 	logger, _ := zap.NewDevelopment()
-	tokens := NewTokenManager(logger)
+	tokens := NewTokenManager(logger, endpoint, audience)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

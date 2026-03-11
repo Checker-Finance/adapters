@@ -4,6 +4,19 @@ import "context"
 
 //
 // ────────────────────────────────────────────────
+//   Service Configuration (service-level, from AWS SM)
+// ────────────────────────────────────────────────
+//
+
+// XFXServiceConfig holds service-wide XFX configuration resolved from AWS Secrets Manager.
+// Secret path: {env}/xfx-adapter → {"auth0_endpoint": "...", "auth0_audience": "..."}
+type XFXServiceConfig struct {
+	Auth0Endpoint string // Auth0 token URL
+	Auth0Audience string // Auth0 API identifier
+}
+
+//
+// ────────────────────────────────────────────────
 //   Client Configuration (per-client, from AWS SM)
 // ────────────────────────────────────────────────
 //
@@ -81,7 +94,7 @@ type XFXQuote struct {
 	Symbol     string  `json:"symbol"`
 	Side       string  `json:"side"`
 	Quantity   float64 `json:"quantity"`
-	Price      float64 `json:"price"`
+	Price      float64 `json:"rate"`
 	ValidUntil string  `json:"validUntil"`
 	Status     string  `json:"status"` // ACTIVE, EXPIRED, EXECUTED, CANCELLED
 	CreatedAt  string  `json:"createdAt"`

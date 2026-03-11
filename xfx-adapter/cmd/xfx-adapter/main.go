@@ -119,8 +119,14 @@ func main() {
 	)
 	go refresher.Start(ctx)
 
+	// --- Fetch service-level config (Auth0 endpoint + audience) ---
+	svcCfg, err := internalsecrets.FetchServiceConfig(ctx, awsProvider, cfg.Env)
+	if err != nil {
+		logg.Fatalw("failed to fetch XFX service config", "error", err)
+	}
+
 	// --- XFX Auth token manager ---
-	tokenMgr := xfx.NewTokenManager(logg.Desugar())
+	tokenMgr := xfx.NewTokenManager(logg.Desugar(), svcCfg.Auth0Endpoint, svcCfg.Auth0Audience)
 
 	// --- XFX HTTP client ---
 	xfxClient := xfx.NewClient(logg.Desugar(), rateMgr, tokenMgr)

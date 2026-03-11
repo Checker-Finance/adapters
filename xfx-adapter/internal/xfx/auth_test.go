@@ -32,10 +32,15 @@ func auth0Response(statusCode int, body string) *http.Response {
 	}
 }
 
+const (
+	testAuth0Endpoint = "https://test.auth0.example.com/oauth/token"
+	testAuth0Audience = "https://api.test.xfx.io"
+)
+
 // newTokenManagerWithTransport creates a TokenManager with a custom HTTP transport.
 func newTokenManagerWithTransport(t *testing.T, fn func(*http.Request) (*http.Response, error)) *TokenManager {
 	t.Helper()
-	tm := NewTokenManager(zap.NewNop())
+	tm := NewTokenManager(zap.NewNop(), testAuth0Endpoint, testAuth0Audience)
 	tm.client = &http.Client{Transport: &mockTransport{fn: fn}}
 	return tm
 }
@@ -200,7 +205,9 @@ func TestTokenManager_GetToken_SendsCorrectPayload(t *testing.T) {
 		ExpiresIn:   3600,
 	})
 
+	var capturedURL string
 	tm := newTokenManagerWithTransport(t, func(req *http.Request) (*http.Response, error) {
+		capturedURL = req.URL.String()
 		_ = json.NewDecoder(req.Body).Decode(&capturedPayload)
 		return auth0Response(http.StatusOK, string(tokenResp)), nil
 	})
@@ -213,8 +220,9 @@ func TestTokenManager_GetToken_SendsCorrectPayload(t *testing.T) {
 	_, err := tm.GetToken(context.Background(), cfg)
 	require.NoError(t, err)
 
+	assert.Equal(t, testAuth0Endpoint, capturedURL)
 	assert.Equal(t, "my-client-id", capturedPayload.ClientID)
 	assert.Equal(t, "my-client-secret", capturedPayload.ClientSecret)
-	assert.Equal(t, auth0Audience, capturedPayload.Audience)
+	assert.Equal(t, testAuth0Audience, capturedPayload.Audience)
 	assert.Equal(t, "client_credentials", capturedPayload.GrantType)
 }

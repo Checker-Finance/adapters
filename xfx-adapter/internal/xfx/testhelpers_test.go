@@ -117,7 +117,7 @@ func newTestService(t *testing.T, serverURL string) *Service {
 	t.Helper()
 	logger := zap.NewNop()
 
-	tokens := NewTokenManager(logger)
+	tokens := NewTokenManager(logger, "https://test.auth0.example.com/oauth/token", "https://api.test.xfx.io")
 	seedToken(tokens, "test-client-id")
 
 	client := NewClient(logger, nil, tokens)

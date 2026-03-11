@@ -13,10 +13,6 @@ import (
 )
 
 const (
-	// auth0TokenEndpoint is the Auth0 token URL for XFX.
-	auth0TokenEndpoint = "https://dev-er8o7vv4aka08m70.us.auth0.com/oauth/token"
-	// auth0Audience is the Auth0 API identifier for XFX — fixed regardless of environment.
-	auth0Audience = "https://api.xfx.io/trading"
 	// tokenExpiryBuffer is the margin before actual expiry at which we pre-fetch a new token.
 	tokenExpiryBuffer = 5 * time.Minute
 )
@@ -30,18 +26,22 @@ type tokenEntry struct {
 // TokenManager fetches and caches OAuth2 client credentials tokens per client.
 // Each client ID maps to a separate cached token derived from its own client_id/client_secret.
 type TokenManager struct {
-	logger  *zap.Logger
-	client  *http.Client
-	mu      sync.Mutex
-	cache   map[string]tokenEntry // clientID → tokenEntry
+	logger        *zap.Logger
+	client        *http.Client
+	mu            sync.Mutex
+	cache         map[string]tokenEntry // clientID → tokenEntry
+	auth0Endpoint string
+	auth0Audience string
 }
 
-// NewTokenManager creates a new TokenManager.
-func NewTokenManager(logger *zap.Logger) *TokenManager {
+// NewTokenManager creates a new TokenManager with the given Auth0 endpoint and audience.
+func NewTokenManager(logger *zap.Logger, endpoint, audience string) *TokenManager {
 	return &TokenManager{
-		logger: logger,
-		client: &http.Client{Timeout: 10 * time.Second},
-		cache:  make(map[string]tokenEntry),
+		logger:        logger,
+		client:        &http.Client{Timeout: 10 * time.Second},
+		cache:         make(map[string]tokenEntry),
+		auth0Endpoint: endpoint,
+		auth0Audience: audience,
 	}
 }
 
@@ -80,7 +80,7 @@ func (m *TokenManager) fetchToken(ctx context.Context, cfg *XFXClientConfig) (*A
 	payload := Auth0TokenRequest{
 		ClientID:     cfg.ClientID,
 		ClientSecret: cfg.ClientSecret,
-		Audience:     auth0Audience,
+		Audience:     m.auth0Audience,
 		GrantType:    "client_credentials",
 	}
 
@@ -89,7 +89,7 @@ func (m *TokenManager) fetchToken(ctx context.Context, cfg *XFXClientConfig) (*A
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, auth0TokenEndpoint, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.auth0Endpoint, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
