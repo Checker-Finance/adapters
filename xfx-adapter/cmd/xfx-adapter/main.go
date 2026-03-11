@@ -121,7 +121,7 @@ func main() {
 
 	// --- XFX Auth token manager ---
 	if cfg.Auth0Endpoint == "" || cfg.Auth0Audience == "" {
-		logg.Fatalw("AUTH0_ENDPOINT and AUTH0_AUDIENCE must be set (injected from AWS secret via ExternalSecret)")
+		logg.Fatalw("AUTH0_ENDPOINT and AUTH0_AUDIENCE must be set (injected via ConfigMap from k8s overlay)")
 	}
 	tokenMgr := xfx.NewTokenManager(logg.Desugar(), cfg.Auth0Endpoint, cfg.Auth0Audience)
 

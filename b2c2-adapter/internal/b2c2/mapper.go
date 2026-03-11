@@ -145,7 +145,7 @@ func formatQuantity(qty string) string {
 		return qty
 	}
 	s := strconv.FormatInt(int64(f), 10)
-	var b []byte
+	b := make([]byte, 0, len(s)+len(s)/3)
 	for i, c := range s {
 		if i > 0 && (len(s)-i)%3 == 0 {
 			b = append(b, ',')
