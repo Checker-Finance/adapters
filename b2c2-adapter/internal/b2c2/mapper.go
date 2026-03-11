@@ -118,10 +118,14 @@ func FromOrderResponseCanceled(resp *OrderResponse, cmd *SubmitOrderCommand) *Or
 }
 
 // rejectionMessage builds a human-readable rejection notice for a failed FOK order.
-// Example: "Quote 7f6bf5c6-86f2-44e0-b0ac-72a787699a2b for 4,000,000 USDT/USD at 1.0002 was rejected; please resend RFQ"
+// Example: "Quote 7f6bf5c6 for 4,000,000 USDT/USD at 1.0002 was rejected; please resend RFQ"
 func rejectionMessage(rfqID, quantity, pair, price string) string {
+	short := rfqID
+	if len(short) > 8 {
+		short = short[:8]
+	}
 	return fmt.Sprintf("Quote %s for %s %s at %s was rejected; please resend RFQ",
-		rfqID,
+		short,
 		formatQuantity(quantity),
 		formatPair(pair),
 		price,
