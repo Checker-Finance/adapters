@@ -2,6 +2,8 @@ package b2c2
 
 import (
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 )
 
@@ -106,10 +108,45 @@ func FromOrderResponseCanceled(resp *OrderResponse, cmd *SubmitOrderCommand) *Or
 		RequestForQuoteID: cmd.RequestForQuoteID,
 		Provider:          "b2c2",
 		Reason:            "no_liquidity",
+		Message:           rejectionMessage(cmd.RequestForQuoteID, cmd.Quantity, cmd.InstrumentPair, cmd.Price),
 		ClientID:          cmd.ClientID,
 		InstrumentPair:    cmd.InstrumentPair,
 		Side:              cmd.Side,
 		Quantity:          cmd.Quantity,
 		QuotedPrice:       cmd.Price,
 	}
+}
+
+// rejectionMessage builds a human-readable rejection notice for a failed FOK order.
+// Example: "Quote 7f6bf5c6-86f2-44e0-b0ac-72a787699a2b for 4,000,000 USDT/USD at 1.0002 was rejected; please resend RFQ"
+func rejectionMessage(rfqID, quantity, pair, price string) string {
+	return fmt.Sprintf("Quote %s for %s %s at %s was rejected; please resend RFQ",
+		rfqID,
+		formatQuantity(quantity),
+		formatPair(pair),
+		price,
+	)
+}
+
+// formatPair converts a canonical pair to display format: "usdt:usd" → "USDT/USD".
+func formatPair(pair string) string {
+	return strings.ToUpper(strings.ReplaceAll(pair, ":", "/"))
+}
+
+// formatQuantity formats a numeric string with thousands separators.
+// Decimal values are returned as-is; integers get commas: "1000000" → "1,000,000".
+func formatQuantity(qty string) string {
+	f, err := strconv.ParseFloat(qty, 64)
+	if err != nil || f != math.Trunc(f) {
+		return qty
+	}
+	s := strconv.FormatInt(int64(f), 10)
+	var b []byte
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b = append(b, ',')
+		}
+		b = append(b, byte(c))
+	}
+	return string(b)
 }

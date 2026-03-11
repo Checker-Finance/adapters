@@ -176,6 +176,10 @@ func TestFromOrderResponseCanceled(t *testing.T) {
 	if event.QuotedPrice != "0.00003123" {
 		t.Errorf("expected quotedPrice 0.00003123, got %s", event.QuotedPrice)
 	}
+	wantMsg := "Quote rfq-123 for 1,000,000 USD/BTC at 0.00003123 was rejected; please resend RFQ"
+	if event.Message != wantMsg {
+		t.Errorf("expected message %q, got %q", wantMsg, event.Message)
+	}
 }
 
 func TestToOrderRequest(t *testing.T) {

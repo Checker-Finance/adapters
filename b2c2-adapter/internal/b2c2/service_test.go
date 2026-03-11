@@ -193,6 +193,10 @@ func TestHandleOrderCommand_NoLiquidity(t *testing.T) {
 	if pub.cancelEvents[0].QuotedPrice != "0.00003" {
 		t.Errorf("expected quotedPrice 0.00003, got %s", pub.cancelEvents[0].QuotedPrice)
 	}
+	wantMsg := "Quote rfq-2 for 1,000,000 USD/BTC at 0.00003 was rejected; please resend RFQ"
+	if pub.cancelEvents[0].Message != wantMsg {
+		t.Errorf("expected message %q, got %q", wantMsg, pub.cancelEvents[0].Message)
+	}
 }
 
 func TestPublisherError(t *testing.T) {
