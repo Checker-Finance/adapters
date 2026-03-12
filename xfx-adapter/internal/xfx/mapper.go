@@ -128,35 +128,6 @@ func txToTradeConfirmation(tx *XFXTransaction, clientID, quoteID string) *model.
 
 //
 // ────────────────────────────────────────────────
-//   XFX → CANONICAL : Account Balances
-// ────────────────────────────────────────────────
-//
-
-// FromXFXAccounts converts an XFX accounts response to a slice of canonical Balances.
-func (m *Mapper) FromXFXAccounts(resp *XFXAccountsResponse, clientID string) []model.Balance {
-	balances := make([]model.Balance, 0, len(resp.Accounts))
-	for _, acct := range resp.Accounts {
-		updatedAt, _ := time.Parse(time.RFC3339, acct.UpdatedAt)
-		if updatedAt.IsZero() {
-			updatedAt = time.Now().UTC()
-		}
-		balances = append(balances, model.Balance{
-			ClientID:    clientID,
-			Venue:       "XFX",
-			Instrument:  acct.Currency,
-			Available:   acct.Available,
-			Held:        acct.Reserved,
-			Total:       acct.Total,
-			CanBuy:      acct.CanBuy,
-			CanSell:     acct.CanSell,
-			LastUpdated: updatedAt,
-		})
-	}
-	return balances
-}
-
-//
-// ────────────────────────────────────────────────
 //   Status Normalization
 // ────────────────────────────────────────────────
 //

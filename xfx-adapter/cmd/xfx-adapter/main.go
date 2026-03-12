@@ -8,8 +8,6 @@ import (
 	"syscall"
 	"time"
 
-	"strings"
-
 	"github.com/Checker-Finance/adapters/xfx-adapter/internal/api"
 	"github.com/Checker-Finance/adapters/internal/jobs"
 	"github.com/Checker-Finance/adapters/internal/legacy"
@@ -159,14 +157,6 @@ func main() {
 		logg.Fatalw("failed to subscribe to NATS command subjects", "error", err)
 	}
 
-	// --- Balance poller: periodic account balance sync ---
-	balanceClients := parseClientIDs(cfg.ClientBalanceIDs)
-	if len(balanceClients) > 0 {
-		go poller.StartBalancePolling(ctx, balanceClients)
-	} else {
-		logg.Warn("no CLIENT_BALANCE_IDS configured; skipping balance polling")
-	}
-
 	// --- Fiber HTTP Server ---
 	app := fiber.New(fiber.Config{
 		ReadTimeout:  cfg.HTTPReadTimeout,
@@ -178,10 +168,9 @@ func main() {
 	clientValidator := api.NewResolverValidator(resolver)
 	xfxHandler := api.NewXFXHandler(logg.Desugar(), xfxSvc, clientValidator)
 	resolveHandler := api.NewOrderResolveHandler(logg.Desugar(), xfxSvc, st, tradeSyncWriter)
-	balanceHandler := api.NewBalanceHandler(logg.Desugar(), st)
 	productsHandler := api.NewProductsHandler(xfxSvc)
 
-	api.RegisterRoutes(app, nc, st, xfxHandler, resolveHandler, balanceHandler, productsHandler)
+	api.RegisterRoutes(app, nc, st, xfxHandler, resolveHandler, productsHandler)
 
 	// Start HTTP server
 	go func() {
@@ -216,17 +205,3 @@ func main() {
 	}
 }
 
-// parseClientIDs splits and trims a comma-separated list of client IDs.
-func parseClientIDs(raw string) []string {
-	if raw == "" {
-		return nil
-	}
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if s := strings.TrimSpace(p); s != "" {
-			out = append(out, s)
-		}
-	}
-	return out
-}

@@ -138,30 +138,6 @@ type XFXListTransactionsResponse struct {
 
 //
 // ────────────────────────────────────────────────
-//   XFX API: Account / Balance Types
-// ────────────────────────────────────────────────
-//
-
-// XFXAccountsResponse is the response from GET /v1/customer/accounts.
-type XFXAccountsResponse struct {
-	Success  bool         `json:"success"`
-	Accounts []XFXAccount `json:"accounts"`
-}
-
-// XFXAccount represents a single account/currency balance.
-type XFXAccount struct {
-	ID        int     `json:"id"`
-	Currency  string  `json:"currency"`
-	Available float64 `json:"available"`
-	Reserved  float64 `json:"reserved"`
-	Total     float64 `json:"total"`
-	CanBuy    bool    `json:"canBuy"`
-	CanSell   bool    `json:"canSell"`
-	UpdatedAt string  `json:"updatedAt"`
-}
-
-//
-// ────────────────────────────────────────────────
 //   XFX API: Error Response
 // ────────────────────────────────────────────────
 //

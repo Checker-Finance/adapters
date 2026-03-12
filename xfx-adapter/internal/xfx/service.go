@@ -234,45 +234,6 @@ func (s *Service) ResolveTransaction(ctx context.Context, clientID, txID string)
 	return trade, nil
 }
 
-// FetchAndPublishBalances fetches XFX account balances, persists them, and publishes NATS events.
-func (s *Service) FetchAndPublishBalances(ctx context.Context, clientID string) error {
-	clientCfg, err := s.resolveConfig(ctx, clientID)
-	if err != nil {
-		return err
-	}
-
-	resp, err := s.client.GetAccounts(ctx, clientCfg)
-	if err != nil {
-		s.logger.Warn("xfx.fetch_balances.failed",
-			zap.String("client", clientID),
-			zap.Error(err))
-		return fmt.Errorf("xfx get accounts: %w", err)
-	}
-
-	balances := s.mapper.FromXFXAccounts(resp, clientID)
-	for _, bal := range balances {
-		if err := s.store.RecordBalanceEvent(ctx, bal); err != nil {
-			s.logger.Warn("xfx.balance_event_failed",
-				zap.String("instrument", bal.Instrument),
-				zap.Error(err))
-		}
-		if err := s.store.UpdateBalanceSnapshot(ctx, bal); err != nil {
-			s.logger.Warn("xfx.balance_snapshot_failed",
-				zap.String("instrument", bal.Instrument),
-				zap.Error(err))
-		}
-		if s.publisher != nil {
-			if err := s.publisher.Publish(ctx, "evt.balance.update.v1", bal); err != nil {
-				metrics.IncNATSPublishError("evt.balance.update.v1")
-				s.logger.Warn("xfx.balance_publish_failed",
-					zap.String("instrument", bal.Instrument),
-					zap.Error(err))
-			}
-		}
-	}
-	return nil
-}
-
 // ListProducts returns the static list of XFX supported products.
 func (s *Service) ListProducts() []model.Product {
 	return xfxSupportedProducts

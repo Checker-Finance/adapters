@@ -62,28 +62,6 @@ func TestIntegration_Auth(t *testing.T) {
 	t.Logf("Auth0 token obtained successfully (length=%d)", len(token))
 }
 
-// TestIntegration_GetAccounts verifies connectivity to the XFX API and retrieves account balances.
-func TestIntegration_GetAccounts(t *testing.T) {
-	client, cfg := newIntegrationClient(t)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	resp, err := client.GetAccounts(ctx, cfg)
-	if err != nil {
-		t.Fatalf("GetAccounts failed: %v", err)
-	}
-	if !resp.Success {
-		t.Fatalf("GetAccounts returned success=false")
-	}
-
-	t.Logf("Accounts retrieved: count=%d", len(resp.Accounts))
-	for _, acc := range resp.Accounts {
-		t.Logf("  account id=%d currency=%s available=%f total=%f canBuy=%v canSell=%v",
-			acc.ID, acc.Currency, acc.Available, acc.Total, acc.CanBuy, acc.CanSell)
-	}
-}
-
 // TestIntegration_RequestQuote verifies that a quote can be requested from XFX.
 // Uses the minimum notional (100,000 USD) on USD/MXN.
 func TestIntegration_RequestQuote(t *testing.T) {

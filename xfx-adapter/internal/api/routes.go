@@ -12,7 +12,7 @@ import (
 )
 
 // RegisterRoutes registers all HTTP routes on the Fiber app.
-func RegisterRoutes(app *fiber.App, nc *nats.Conn, st store.Store, xfxHandler *XFXHandler, resolveHandler *OrderResolveHandler, balanceHandler *BalanceHandler, productsHandler *ProductsHandler) {
+func RegisterRoutes(app *fiber.App, nc *nats.Conn, st store.Store, xfxHandler *XFXHandler, resolveHandler *OrderResolveHandler, productsHandler *ProductsHandler) {
 	app.Get("/metrics", adaptor.HTTPHandler(promhttp.Handler()))
 
 	// Health check
@@ -53,6 +53,5 @@ func RegisterRoutes(app *fiber.App, nc *nats.Conn, st store.Store, xfxHandler *X
 	v1.Post("/quotes", xfxHandler.CreateRFQHandler)
 	v1.Post("/orders", xfxHandler.ExecuteRFQHandler)
 	v1.Post("/resolve-order/:quoteId", resolveHandler.ResolveOrder)
-	v1.Get("/balances/:client_id", balanceHandler.GetBalances)
 	v1.Get("/products", productsHandler.ListProducts)
 }
