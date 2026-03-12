@@ -50,6 +50,11 @@ test:
 	@echo "Running unit tests..."
 	@cd .. && $(GO) test ./$(SERVICE)/... -count=1 -race -v
 
+.PHONY: integration-test
+integration-test:
+	@echo "Running integration tests against B2C2 sandbox..."
+	@cd .. && $(GO) test -v -tags integration -count=1 -run TestIntegration ./$(SERVICE)/...
+
 .PHONY: bench
 bench:
 	@echo "Running benchmarks..."
