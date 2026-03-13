@@ -5,6 +5,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 )
 
 //
@@ -71,6 +72,7 @@ func ToOrderRequest(cmd *SubmitOrderCommand) *OrderRequest {
 		OrderType:     "FOK",
 		RFQID:         cmd.RequestForQuoteID,
 		ClientOrderID: cmd.ClientOrderID,
+		ValidUntil:    time.Now().UTC().Add(10 * time.Second).Format(time.RFC3339),
 	}
 }
 

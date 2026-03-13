@@ -46,10 +46,10 @@ func (c *Client) RequestQuote(ctx context.Context, cfg *B2C2ClientConfig, req *R
 }
 
 // ExecuteOrder submits a FOK order to B2C2.
-// POST /v2/order/
+// POST /order/
 func (c *Client) ExecuteOrder(ctx context.Context, cfg *B2C2ClientConfig, req *OrderRequest) (*OrderResponse, error) {
 	var resp OrderResponse
-	if err := c.postJSON(ctx, cfg, "/v2/order/", req, &resp); err != nil {
+	if err := c.postJSON(ctx, cfg, "/order/", req, &resp); err != nil {
 		return nil, fmt.Errorf("b2c2: execute_order: %w", err)
 	}
 	return &resp, nil

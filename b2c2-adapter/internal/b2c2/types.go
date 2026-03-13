@@ -56,7 +56,7 @@ type RFQResponse struct {
 // ────────────────────────────────────────────────────────────
 //
 
-// OrderRequest is the payload for POST /v2/order/.
+// OrderRequest is the payload for POST /order/.
 type OrderRequest struct {
 	Instrument    string `json:"instrument"`               // e.g. "BTCUSD.SPOT"
 	Side          string `json:"side"`                     // "buy" or "sell"
@@ -65,10 +65,11 @@ type OrderRequest struct {
 	OrderType     string `json:"order_type"`               // always "FOK"
 	RFQID         string `json:"rfq_id,omitempty"`         // associated RFQ
 	ClientOrderID string `json:"client_order_id"`          // idempotency key
+	ValidUntil    string `json:"valid_until"`              // RFC3339 expiry (required)
 	ExecutingUnit string `json:"executing_unit,omitempty"` // optional
 }
 
-// OrderResponse is the response from POST /v2/order/.
+// OrderResponse is the response from POST /order/.
 type OrderResponse struct {
 	OrderID       string  `json:"order_id"`
 	ClientOrderID string  `json:"client_order_id"`

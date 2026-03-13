@@ -24,7 +24,7 @@ func newIntegrationConfig(t *testing.T) *B2C2ClientConfig {
 
 	baseURL := os.Getenv("B2C2_BASE_URL")
 	if baseURL == "" {
-		baseURL = "https://uat.b2c2.net"
+		baseURL = "https://api.uat.b2c2.net"
 	}
 
 	return &B2C2ClientConfig{
@@ -191,6 +191,7 @@ func TestIntegration_RFQToOrder(t *testing.T) {
 		OrderType:     "FOK",
 		RFQID:         rfq.RFQID,
 		ClientOrderID: fmt.Sprintf("integration-co-%d", time.Now().UnixNano()),
+		ValidUntil:    rfq.ValidUntil,
 	})
 	if err != nil {
 		t.Logf("ExecuteOrder returned expected error: %v", err)
