@@ -46,7 +46,7 @@ func newTestApp(svc RFQService) *fiber.App {
 	handler := NewRioHandler(zap.NewNop(), svc, nil)
 	v1 := app.Group("/api/v1")
 	v1.Post("/quotes", handler.CreateRFQHandler)
-	v1.Post("/quotes/:quotation_id/execute", handler.ExecuteRFQHandler)
+	v1.Post("/orders", handler.ExecuteRFQHandler)
 	return app
 }
 
@@ -55,7 +55,7 @@ func newTestAppWithValidator(svc RFQService, validator ClientValidator) *fiber.A
 	handler := NewRioHandler(zap.NewNop(), svc, validator)
 	v1 := app.Group("/api/v1")
 	v1.Post("/quotes", handler.CreateRFQHandler)
-	v1.Post("/quotes/:quotation_id/execute", handler.ExecuteRFQHandler)
+	v1.Post("/orders", handler.ExecuteRFQHandler)
 	return app
 }
 
@@ -232,7 +232,7 @@ func TestExecuteRFQHandler_Success(t *testing.T) {
 	svc := &mockService{
 		executeRFQFn: func(ctx context.Context, clientID, quoteID string) (*model.TradeConfirmation, error) {
 			assert.Equal(t, "client-001", clientID)
-			assert.Equal(t, "qt-from-url", quoteID)
+			assert.Equal(t, "qt-001", quoteID)
 			return &model.TradeConfirmation{
 				TradeID:    "ord-001",
 				Status:     "filled",
@@ -244,8 +244,8 @@ func TestExecuteRFQHandler_Success(t *testing.T) {
 
 	app := newTestApp(svc)
 
-	body := `{"clientId": "client-001", "orderId": "my-order-001"}`
-	req, _ := http.NewRequest(http.MethodPost, "/api/v1/quotes/qt-from-url/execute", strings.NewReader(body))
+	body := `{"clientId": "client-001", "orderId": "my-order-001", "quoteId": "qt-001"}`
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/orders", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req, -1)
@@ -263,30 +263,26 @@ func TestExecuteRFQHandler_Success(t *testing.T) {
 	assert.Empty(t, result.ErrorMsg)
 }
 
-func TestExecuteRFQHandler_URLParamTakesPrecedence(t *testing.T) {
+func TestExecuteRFQHandler_ProviderQuoteIDFallback(t *testing.T) {
 	var receivedQuoteID string
 	svc := &mockService{
 		executeRFQFn: func(ctx context.Context, clientID, quoteID string) (*model.TradeConfirmation, error) {
 			receivedQuoteID = quoteID
-			return &model.TradeConfirmation{
-				TradeID:    "ord-002",
-				Status:     "filled",
-				ExecutedAt: time.Now(),
-			}, nil
+			return &model.TradeConfirmation{TradeID: "ord-002", Status: "filled", ExecutedAt: time.Now()}, nil
 		},
 	}
 
 	app := newTestApp(svc)
 
-	// URL has qt-from-url, body has qt-from-body — URL should win
-	body := `{"clientId": "client-001", "quoteId": "qt-from-body"}`
-	req, _ := http.NewRequest(http.MethodPost, "/api/v1/quotes/qt-from-url/execute", strings.NewReader(body))
+	// quoteId absent, providerQuoteId should be used as fallback
+	body := `{"clientId": "client-001", "providerQuoteId": "pq-001"}`
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/orders", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req, -1)
 	require.NoError(t, err)
 	assert.Equal(t, fiber.StatusOK, resp.StatusCode)
-	assert.Equal(t, "qt-from-url", receivedQuoteID)
+	assert.Equal(t, "pq-001", receivedQuoteID)
 }
 
 func TestExecuteRFQHandler_ValidationError(t *testing.T) {
@@ -295,7 +291,7 @@ func TestExecuteRFQHandler_ValidationError(t *testing.T) {
 
 	// Missing clientId
 	body := `{"quoteId": "qt-001"}`
-	req, _ := http.NewRequest(http.MethodPost, "/api/v1/quotes/qt-001/execute", strings.NewReader(body))
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/orders", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req, -1)
@@ -317,8 +313,8 @@ func TestExecuteRFQHandler_ServiceError(t *testing.T) {
 
 	app := newTestApp(svc)
 
-	body := `{"clientId": "client-001", "orderId": "ord-001"}`
-	req, _ := http.NewRequest(http.MethodPost, "/api/v1/quotes/qt-expired/execute", strings.NewReader(body))
+	body := `{"clientId": "client-001", "orderId": "ord-001", "quoteId": "qt-expired"}`
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/orders", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req, -1)
@@ -336,7 +332,7 @@ func TestExecuteRFQHandler_InvalidJSON(t *testing.T) {
 	svc := &mockService{}
 	app := newTestApp(svc)
 
-	req, _ := http.NewRequest(http.MethodPost, "/api/v1/quotes/qt-001/execute", strings.NewReader("{bad"))
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/orders", strings.NewReader("{bad"))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req, -1)
@@ -426,8 +422,8 @@ func TestExecuteRFQHandler_UnknownClient_Forbidden(t *testing.T) {
 	validator := &mockValidator{known: map[string]bool{"client-001": true}}
 	app := newTestAppWithValidator(svc, validator)
 
-	body := `{"clientId": "unknown-client", "orderId": "ord-001"}`
-	req, _ := http.NewRequest(http.MethodPost, "/api/v1/quotes/qt-001/execute", strings.NewReader(body))
+	body := `{"clientId": "unknown-client", "orderId": "ord-001", "quoteId": "qt-001"}`
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/orders", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req, -1)
