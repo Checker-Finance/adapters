@@ -85,14 +85,7 @@ func (h *ZodiaHandler) ExecuteRFQHandler(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "unknown or unauthorized clientId"})
 	}
 
-	// Resolve quote ID from URL param or body fields
-	quoteID := c.Params("quotation_id")
-	if quoteID == "" {
-		quoteID = req.QuoteID
-	}
-	if quoteID == "" {
-		quoteID = req.ProviderQuoteID
-	}
+	quoteID := req.ResolveQuoteID()
 	if quoteID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "quoteId is required"})
 	}

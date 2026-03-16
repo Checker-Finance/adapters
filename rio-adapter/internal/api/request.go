@@ -10,6 +10,14 @@ type RFQCreateRequest struct {
 	Amount             float64 `json:"quantity" example:"1000.00"`
 }
 
+// ResolveQuoteID returns the quote ID from QuoteID, falling back to ProviderQuoteID.
+func (r RFQExecuteRequest) ResolveQuoteID() string {
+	if r.QuoteID != "" {
+		return r.QuoteID
+	}
+	return r.ProviderQuoteID
+}
+
 // RFQExecuteRequest represents the payload for executing a quotation.
 type RFQExecuteRequest struct {
 	OrderID                   string  `json:"orderId"`
