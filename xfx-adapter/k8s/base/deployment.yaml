@@ -49,8 +49,8 @@ spec:
           env:
             - name: NATS_URL
               value: "nats://nats.nats.svc.cluster.local:4222"
-            - name: REDIS_ADDR
-              value: "redis.redis.svc.cluster.local:6379"
+            - name: REDIS_URL
+              value: "redis://redis.redis.svc.cluster.local:6379"
           livenessProbe:
             httpGet:
               path: /health
