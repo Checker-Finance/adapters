@@ -56,7 +56,7 @@ ENV LOG_LEVEL=info \
 
 # Health check for non-K8s runtimes (ECS, Docker Compose)
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:9010/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:9010/health || exit 1
 
 # Run binary
 ENTRYPOINT ["./rio-adapter"]
