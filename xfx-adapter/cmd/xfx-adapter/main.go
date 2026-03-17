@@ -166,8 +166,9 @@ func main() {
 	xfxHandler := api.NewXFXHandler(logg.Desugar(), xfxSvc, clientValidator)
 	resolveHandler := api.NewOrderResolveHandler(logg.Desugar(), xfxSvc, st, tradeSyncWriter)
 	productsHandler := api.NewProductsHandler(xfxSvc)
+	balanceHandler := api.NewBalanceHandler(st, logg.Desugar())
 
-	api.RegisterRoutes(app, nc, st, xfxHandler, resolveHandler, productsHandler)
+	api.RegisterRoutes(app, nc, st, xfxHandler, resolveHandler, productsHandler, balanceHandler)
 
 	// Start HTTP server
 	go func() {
