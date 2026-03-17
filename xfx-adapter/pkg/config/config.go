@@ -1,6 +1,9 @@
 package config
 
 import (
+	"context"
+	"fmt"
+	"log"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -38,10 +41,6 @@ type Config struct {
 	PGMaxConnIdleTime   time.Duration
 	PGHealthCheckPeriod time.Duration
 
-	// Auth0 service-level config (injected via ExternalSecret from {env}/xfx-adapter)
-	Auth0Endpoint string // Auth0 token endpoint URL
-	Auth0Audience string // Auth0 API audience identifier
-
 	// XFX-specific configuration
 	// Per-client config (client_id, client_secret, base_url) is resolved from
 	// AWS Secrets Manager at runtime. See internal/secrets/resolver.go.
@@ -51,11 +50,12 @@ type Config struct {
 	SummaryRefreshInterval time.Duration // How often to refresh the balance summary materialized view
 }
 
-// Load loads configuration from environment variables and optional .env file.
-func Load() *Config {
+// Load loads configuration from environment variables, then overlays any values
+// found in the service-level AWS Secrets Manager secret at {env}/{service-name}.
+func Load(ctx context.Context) *Config {
 	_ = godotenv.Load()
 
-	return &Config{
+	cfg := &Config{
 		ServiceName:         pkgconfig.GetEnv("SERVICE_NAME", "xfx-adapter"),
 		Venue:               "xfx",
 		Env:                 pkgconfig.GetEnv("ENV", "dev"),
@@ -80,11 +80,36 @@ func Load() *Config {
 		PGMaxConnLifetime:   pkgconfig.GetEnvDuration("PG_MAX_CONN_LIFETIME", 30*time.Minute),
 		PGMaxConnIdleTime:   pkgconfig.GetEnvDuration("PG_MAX_CONN_IDLE_TIME", 5*time.Minute),
 		PGHealthCheckPeriod: pkgconfig.GetEnvDuration("PG_HEALTH_CHECK_PERIOD", 1*time.Minute),
-		Auth0Endpoint:          pkgconfig.GetEnv("AUTH0_ENDPOINT", ""),
-		Auth0Audience:          pkgconfig.GetEnv("AUTH0_AUDIENCE", ""),
 		XFXPollInterval:        pkgconfig.GetEnvDuration("XFX_POLL_INTERVAL", 15*time.Second),
 		RFQSweepInterval:       pkgconfig.GetEnvDuration("RFQ_SWEEP_INTERVAL", 5*time.Minute),
 		RFQSweepTTL:            pkgconfig.GetEnvDuration("RFQ_SWEEP_TTL", 15*time.Minute),
 		SummaryRefreshInterval: pkgconfig.GetEnvDuration("SUMMARY_REFRESH_INTERVAL", 24*time.Hour),
+	}
+
+	secretPath := fmt.Sprintf("%s/%s", cfg.Env, cfg.ServiceName)
+	sm, err := pkgconfig.FetchServiceSecret(ctx, cfg.AWSRegion, secretPath)
+	if err != nil {
+		log.Printf("[config] service secret unavailable (%s): %v", secretPath, err)
+	} else {
+		cfg.applyServiceSecret(sm)
+	}
+
+	return cfg
+}
+
+// applyServiceSecret overlays non-empty values from the AWS Secrets Manager
+// service secret onto the config, overriding env var defaults.
+func (c *Config) applyServiceSecret(m map[string]string) {
+	if v := m["database_url"]; v != "" {
+		c.DatabaseURL = v
+	}
+	if v := m["nats_url"]; v != "" {
+		c.NATSURL = v
+	}
+	if v := m["redis_url"]; v != "" {
+		c.RedisURL = v
+	}
+	if v := m["log_level"]; v != "" {
+		c.LogLevel = v
 	}
 }

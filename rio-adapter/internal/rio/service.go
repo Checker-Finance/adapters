@@ -203,7 +203,9 @@ func (s *Service) BuildTradeConfirmationFromOrder(clientID, orderID string, orde
 }
 
 // RegisterOrderWebhook registers a webhook for order status changes for all discovered clients.
-func (s *Service) RegisterOrderWebhook(ctx context.Context, callbackURL string) error {
+// Each client's callback URL is taken from its per-client config (WebhookURL field).
+// Clients without a WebhookURL configured are skipped.
+func (s *Service) RegisterOrderWebhook(ctx context.Context) error {
 	clients, err := s.configResolver.DiscoverClients(ctx)
 	if err != nil || len(clients) == 0 {
 		s.logger.Warn("rio.register_webhook.no_clients",
@@ -223,11 +225,17 @@ func (s *Service) RegisterOrderWebhook(ctx context.Context, callbackURL string) 
 			continue
 		}
 
-		resp, err := s.client.RegisterWebhook(ctx, clientCfg, callbackURL, true)
+		if clientCfg.WebhookURL == "" {
+			s.logger.Debug("rio.register_webhook.skipped_no_url",
+				zap.String("client", clientID))
+			continue
+		}
+
+		resp, err := s.client.RegisterWebhook(ctx, clientCfg, clientCfg.WebhookURL, true)
 		if err != nil {
 			s.logger.Error("rio.register_webhook.failed",
 				zap.String("client", clientID),
-				zap.String("callback_url", callbackURL),
+				zap.String("callback_url", clientCfg.WebhookURL),
 				zap.Error(err))
 			lastErr = err
 			continue

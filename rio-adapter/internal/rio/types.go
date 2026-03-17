@@ -9,11 +9,14 @@ import "context"
 //
 
 // RioClientConfig holds per-client Rio API configuration resolved from AWS Secrets Manager.
-// Secret format: {"api_key": "...", "base_url": "https://...", "country": "US"}
+// Secret format: {"api_key": "...", "base_url": "https://...", "country": "US", "webhook_url": "...", "webhook_secret": "...", "webhook_sig_header": "X-Rio-Signature"}
 type RioClientConfig struct {
-	BaseURL string // Rio API base URL (e.g. "https://app.sandbox.rio.trade")
-	APIKey  string // Rio API key for x-api-key header
-	Country string // Country code for Rio operations (US, MX, PE)
+	BaseURL          string // Rio API base URL (e.g. "https://app.sandbox.rio.trade")
+	APIKey           string // Rio API key for x-api-key header
+	Country          string // Country code for Rio operations (US, MX, PE)
+	WebhookURL       string // Callback URL to register with Rio for this client (optional)
+	WebhookSecret    string // HMAC secret for validating Rio webhook signatures (optional)
+	WebhookSigHeader string // Header name carrying the webhook signature (default: X-Rio-Signature)
 }
 
 // rateLimitKey returns a key that isolates rate limits per client,

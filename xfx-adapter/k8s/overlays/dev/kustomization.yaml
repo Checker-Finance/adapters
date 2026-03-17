@@ -42,12 +42,6 @@ patches:
       - op: replace
         path: /data/XFX_POLL_INTERVAL
         value: 15s
-      - op: replace
-        path: /data/AUTH0_ENDPOINT
-        value: https://dev-er8o7vv4aka08m70.us.auth0.com/oauth/token
-      - op: replace
-        path: /data/AUTH0_AUDIENCE
-        value: https://dev.xfx.io
   - patch: |-
       - op: replace
         path: /spec/rules/0/host

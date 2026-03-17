@@ -76,7 +76,8 @@ func TestWebhookHandler_HandleOrderWebhook(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewWebhookHandler(logger, nil, nil, nil, nil, nil, "", "")
+			// nil resolver → signature validation skipped
+			handler := NewWebhookHandler(logger, nil, nil, nil, nil, nil, nil)
 
 			app := fiber.New()
 			app.Post("/webhooks/rio/orders", handler.HandleOrderWebhook)
@@ -97,7 +98,7 @@ func TestWebhookHandler_HandleOrderWebhook(t *testing.T) {
 
 func TestWebhookHandler_InvalidPayload(t *testing.T) {
 	logger := zap.NewNop()
-	handler := NewWebhookHandler(logger, nil, nil, nil, nil, nil, "", "")
+	handler := NewWebhookHandler(logger, nil, nil, nil, nil, nil, nil)
 
 	app := fiber.New()
 	app.Post("/webhooks/rio/orders", handler.HandleOrderWebhook)
@@ -117,7 +118,7 @@ func TestWebhookHandler_InvalidPayload(t *testing.T) {
 
 func TestWebhookHandler_EmptyBody(t *testing.T) {
 	logger := zap.NewNop()
-	handler := NewWebhookHandler(logger, nil, nil, nil, nil, nil, "", "")
+	handler := NewWebhookHandler(logger, nil, nil, nil, nil, nil, nil)
 
 	app := fiber.New()
 	app.Post("/webhooks/rio/orders", handler.HandleOrderWebhook)
@@ -134,7 +135,15 @@ func TestWebhookHandler_EmptyBody(t *testing.T) {
 
 func TestWebhookHandler_InvalidSignature(t *testing.T) {
 	logger := zap.NewNop()
-	handler := NewWebhookHandler(logger, nil, nil, nil, nil, nil, "secret", "X-Rio-Signature")
+
+	// Resolver returns per-client webhook secret for "client-ref-789"
+	resolver := &mockConfigResolver{
+		cfg: &RioClientConfig{
+			WebhookSecret:    "secret",
+			WebhookSigHeader: "X-Rio-Signature",
+		},
+	}
+	handler := NewWebhookHandler(logger, nil, nil, nil, nil, nil, resolver)
 
 	app := fiber.New()
 	app.Post("/webhooks/rio/orders", handler.HandleOrderWebhook)
@@ -166,7 +175,15 @@ func TestWebhookHandler_InvalidSignature(t *testing.T) {
 
 func TestWebhookHandler_ValidSignature(t *testing.T) {
 	logger := zap.NewNop()
-	handler := NewWebhookHandler(logger, nil, nil, nil, nil, nil, "secret", "X-Rio-Signature")
+
+	// Resolver returns per-client webhook secret for "client-ref-789"
+	resolver := &mockConfigResolver{
+		cfg: &RioClientConfig{
+			WebhookSecret:    "secret",
+			WebhookSigHeader: "X-Rio-Signature",
+		},
+	}
+	handler := NewWebhookHandler(logger, nil, nil, nil, nil, nil, resolver)
 
 	app := fiber.New()
 	app.Post("/webhooks/rio/orders", handler.HandleOrderWebhook)

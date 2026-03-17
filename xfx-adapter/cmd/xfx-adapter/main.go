@@ -29,7 +29,7 @@ func main() {
 	defer stop()
 
 	// --- Load configuration ---
-	cfg := config.Load()
+	cfg := config.Load(ctx)
 	cfg.ServiceName = "xfx-adapter"
 	cfg.Venue = "xfx"
 
@@ -118,10 +118,7 @@ func main() {
 	go refresher.Start(ctx)
 
 	// --- XFX Auth token manager ---
-	if cfg.Auth0Endpoint == "" || cfg.Auth0Audience == "" {
-		logg.Fatalw("AUTH0_ENDPOINT and AUTH0_AUDIENCE must be set (injected via ConfigMap from k8s overlay)")
-	}
-	tokenMgr := xfx.NewTokenManager(logg.Desugar(), cfg.Auth0Endpoint, cfg.Auth0Audience)
+	tokenMgr := xfx.NewTokenManager(logg.Desugar())
 
 	// --- XFX HTTP client ---
 	xfxClient := xfx.NewClient(logg.Desugar(), rateMgr, tokenMgr)

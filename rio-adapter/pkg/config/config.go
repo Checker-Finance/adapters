@@ -1,6 +1,9 @@
 package config
 
 import (
+	"context"
+	"fmt"
+	"log"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -44,16 +47,14 @@ type Config struct {
 	PGHealthCheckPeriod time.Duration
 
 	// Rio-specific configuration
-	// Per-client config (api_key, base_url, country) is resolved from AWS Secrets Manager
-	// at runtime. See internal/secrets/resolver.go for the naming convention.
-	RioPollInterval           time.Duration // Polling interval for Rio order status (fallback for webhooks)
-	RioWebhookURL             string        // Callback URL for Rio webhooks
-	RioWebhookSecret          string        // Webhook secret for signature validation
-	RioWebhookSignatureHeader string        // Signature header name for webhook validation
+	// Per-client config (api_key, base_url, country, webhook_url, webhook_secret, webhook_sig_header)
+	// is resolved from AWS Secrets Manager at runtime. See internal/secrets/resolver.go.
+	RioPollInterval time.Duration // Polling interval for Rio order status (fallback for webhooks)
 }
 
-// Load loads configuration from environment variables and .env file if present.
-func Load() *Config {
+// Load loads configuration from environment variables, then overlays any values
+// found in the service-level AWS Secrets Manager secret at {env}/{service-name}.
+func Load(ctx context.Context) *Config {
 	// load .env silently (no error if missing)
 	_ = godotenv.Load()
 
@@ -86,12 +87,34 @@ func Load() *Config {
 		PGHealthCheckPeriod: pkgconfig.GetEnvDuration("PG_HEALTH_CHECK_PERIOD", 1*time.Minute),
 
 		// Rio-specific configuration (per-client config resolved from AWS Secrets Manager)
-		RioPollInterval:           pkgconfig.GetEnvDuration("RIO_POLL_INTERVAL", 30*time.Second),
-		RioWebhookURL:             pkgconfig.GetEnv("RIO_WEBHOOK_URL", ""),
-		RioWebhookSecret:          pkgconfig.GetEnv("RIO_WEBHOOK_SECRET", ""),
-		RioWebhookSignatureHeader: pkgconfig.GetEnv("RIO_WEBHOOK_SIGNATURE_HEADER", "X-Rio-Signature"),
+		RioPollInterval: pkgconfig.GetEnvDuration("RIO_POLL_INTERVAL", 30*time.Second),
+	}
+
+	secretPath := fmt.Sprintf("%s/%s", cfg.Env, cfg.ServiceName)
+	sm, err := pkgconfig.FetchServiceSecret(ctx, cfg.AWSRegion, secretPath)
+	if err != nil {
+		log.Printf("[config] service secret unavailable (%s): %v", secretPath, err)
+	} else {
+		cfg.applyServiceSecret(sm)
 	}
 
 	return cfg
+}
+
+// applyServiceSecret overlays non-empty values from the AWS Secrets Manager
+// service secret onto the config, overriding env var defaults.
+func (c *Config) applyServiceSecret(m map[string]string) {
+	if v := m["database_url"]; v != "" {
+		c.DatabaseURL = v
+	}
+	if v := m["nats_url"]; v != "" {
+		c.NATSURL = v
+	}
+	if v := m["redis_url"]; v != "" {
+		c.RedisURL = v
+	}
+	if v := m["log_level"]; v != "" {
+		c.LogLevel = v
+	}
 }
 

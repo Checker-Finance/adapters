@@ -49,9 +49,11 @@ func (r *AWSResolver) DiscoverClients(ctx context.Context) ([]string, error) {
 // parseXFXConfig extracts an XFXClientConfig from the raw AWS secret map.
 func parseXFXConfig(m map[string]string) (xfx.XFXClientConfig, error) {
 	cfg := xfx.XFXClientConfig{
-		ClientID:     m["client_id"],
-		ClientSecret: m["client_secret"],
-		BaseURL:      m["base_url"],
+		ClientID:      m["client_id"],
+		ClientSecret:  m["client_secret"],
+		BaseURL:       m["base_url"],
+		Auth0Endpoint: m["auth0_endpoint"],
+		Auth0Audience: m["auth0_audience"],
 	}
 	if cfg.ClientID == "" {
 		return xfx.XFXClientConfig{}, fmt.Errorf("missing required field 'client_id'")
@@ -61,6 +63,12 @@ func parseXFXConfig(m map[string]string) (xfx.XFXClientConfig, error) {
 	}
 	if cfg.BaseURL == "" {
 		return xfx.XFXClientConfig{}, fmt.Errorf("missing required field 'base_url'")
+	}
+	if cfg.Auth0Endpoint == "" {
+		return xfx.XFXClientConfig{}, fmt.Errorf("missing required field 'auth0_endpoint'")
+	}
+	if cfg.Auth0Audience == "" {
+		return xfx.XFXClientConfig{}, fmt.Errorf("missing required field 'auth0_audience'")
 	}
 	return cfg, nil
 }

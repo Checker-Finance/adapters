@@ -9,11 +9,13 @@ import "context"
 //
 
 // XFXClientConfig holds per-client XFX API configuration resolved from AWS Secrets Manager.
-// Secret path: {env}/{clientID}/xfx → {"client_id": "...", "client_secret": "...", "base_url": "https://api.xfx.io"}
+// Secret path: {env}/{clientID}/xfx → {"client_id": "...", "client_secret": "...", "base_url": "...", "auth0_endpoint": "...", "auth0_audience": "..."}
 type XFXClientConfig struct {
-	BaseURL      string // XFX API base URL (e.g. "https://dev-api.xfx.io")
-	ClientID     string // OAuth2 client_id for Auth0 token request
-	ClientSecret string // OAuth2 client_secret for Auth0 token request
+	BaseURL       string // XFX API base URL (e.g. "https://dev-api.xfx.io")
+	ClientID      string // OAuth2 client_id for Auth0 token request
+	ClientSecret  string // OAuth2 client_secret for Auth0 token request
+	Auth0Endpoint string // Auth0 token endpoint URL (per-client, may use different Auth0 tenants)
+	Auth0Audience string // Auth0 API audience identifier
 }
 
 

@@ -40,16 +40,18 @@ const (
 // newTokenManagerWithTransport creates a TokenManager with a custom HTTP transport.
 func newTokenManagerWithTransport(t *testing.T, fn func(*http.Request) (*http.Response, error)) *TokenManager {
 	t.Helper()
-	tm := NewTokenManager(zap.NewNop(), testAuth0Endpoint, testAuth0Audience)
+	tm := NewTokenManager(zap.NewNop())
 	tm.client = &http.Client{Transport: &mockTransport{fn: fn}}
 	return tm
 }
 
 func testCfg(clientID string) *XFXClientConfig {
 	return &XFXClientConfig{
-		ClientID:     clientID,
-		ClientSecret: "secret-" + clientID,
-		BaseURL:      "https://api.test.xfx.io",
+		ClientID:      clientID,
+		ClientSecret:  "secret-" + clientID,
+		BaseURL:       "https://api.test.xfx.io",
+		Auth0Endpoint: testAuth0Endpoint,
+		Auth0Audience: testAuth0Audience,
 	}
 }
 
@@ -213,9 +215,11 @@ func TestTokenManager_GetToken_SendsCorrectPayload(t *testing.T) {
 	})
 
 	cfg := &XFXClientConfig{
-		ClientID:     "my-client-id",
-		ClientSecret: "my-client-secret",
-		BaseURL:      "https://api.xfx.io",
+		ClientID:      "my-client-id",
+		ClientSecret:  "my-client-secret",
+		BaseURL:       "https://api.xfx.io",
+		Auth0Endpoint: testAuth0Endpoint,
+		Auth0Audience: testAuth0Audience,
 	}
 	_, err := tm.GetToken(context.Background(), cfg)
 	require.NoError(t, err)

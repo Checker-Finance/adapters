@@ -25,23 +25,20 @@ type tokenEntry struct {
 
 // TokenManager fetches and caches OAuth2 client credentials tokens per client.
 // Each client ID maps to a separate cached token derived from its own client_id/client_secret.
+// Auth0 endpoint and audience are taken from the per-client XFXClientConfig.
 type TokenManager struct {
-	logger        *zap.Logger
-	client        *http.Client
-	mu            sync.Mutex
-	cache         map[string]tokenEntry // clientID → tokenEntry
-	auth0Endpoint string
-	auth0Audience string
+	logger *zap.Logger
+	client *http.Client
+	mu     sync.Mutex
+	cache  map[string]tokenEntry // clientID → tokenEntry
 }
 
-// NewTokenManager creates a new TokenManager with the given Auth0 endpoint and audience.
-func NewTokenManager(logger *zap.Logger, endpoint, audience string) *TokenManager {
+// NewTokenManager creates a new TokenManager.
+func NewTokenManager(logger *zap.Logger) *TokenManager {
 	return &TokenManager{
-		logger:        logger,
-		client:        &http.Client{Timeout: 10 * time.Second},
-		cache:         make(map[string]tokenEntry),
-		auth0Endpoint: endpoint,
-		auth0Audience: audience,
+		logger: logger,
+		client: &http.Client{Timeout: 10 * time.Second},
+		cache:  make(map[string]tokenEntry),
 	}
 }
 
@@ -77,10 +74,14 @@ func (m *TokenManager) GetToken(ctx context.Context, cfg *XFXClientConfig) (stri
 
 // fetchToken requests a new access token from Auth0.
 func (m *TokenManager) fetchToken(ctx context.Context, cfg *XFXClientConfig) (*Auth0TokenResponse, error) {
+	if cfg.Auth0Endpoint == "" || cfg.Auth0Audience == "" {
+		return nil, fmt.Errorf("auth0_endpoint and auth0_audience must be set in client secret")
+	}
+
 	payload := Auth0TokenRequest{
 		ClientID:     cfg.ClientID,
 		ClientSecret: cfg.ClientSecret,
-		Audience:     m.auth0Audience,
+		Audience:     cfg.Auth0Audience,
 		GrantType:    "client_credentials",
 	}
 
@@ -89,7 +90,7 @@ func (m *TokenManager) fetchToken(ctx context.Context, cfg *XFXClientConfig) (*A
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.auth0Endpoint, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.Auth0Endpoint, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}

@@ -91,9 +91,10 @@ func newTestService(t *testing.T, serverURL string) *Service {
 
 	resolver := &mockConfigResolver{
 		cfg: &RioClientConfig{
-			BaseURL: serverURL,
-			APIKey:  "test-api-key",
-			Country: "US",
+			BaseURL:    serverURL,
+			APIKey:     "test-api-key",
+			Country:    "US",
+			WebhookURL: serverURL + "/webhooks/rio/orders",
 		},
 		clients: []string{"client-001"},
 	}
@@ -341,7 +342,7 @@ func TestService_RegisterOrderWebhook_Success(t *testing.T) {
 
 	svc := newTestService(t, server.URL)
 
-	err := svc.RegisterOrderWebhook(context.Background(), "https://example.com/webhook")
+	err := svc.RegisterOrderWebhook(context.Background())
 	require.NoError(t, err)
 }
 

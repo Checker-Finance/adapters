@@ -30,7 +30,7 @@ func main() {
 	defer stop()
 
 	// --- Load configuration ---
-	cfg := config.Load()
+	cfg := config.Load(ctx)
 	cfg.ServiceName = "zodia-adapter"
 	cfg.Venue = "zodia"
 

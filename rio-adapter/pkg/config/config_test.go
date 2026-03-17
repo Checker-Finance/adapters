@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ func TestLoad_Defaults(t *testing.T) {
 		t.Setenv(key, "")
 	}
 
-	cfg := Load()
+	cfg := Load(context.Background())
 
 	if cfg.ServiceName != "rio-adapter" {
 		t.Errorf("expected ServiceName=rio-adapter, got %s", cfg.ServiceName)
@@ -58,9 +59,6 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.HTTPBodyLimit != 1*1024*1024 {
 		t.Errorf("expected HTTPBodyLimit=1048576, got %d", cfg.HTTPBodyLimit)
 	}
-	if cfg.RioWebhookSignatureHeader != "X-Rio-Signature" {
-		t.Errorf("expected RioWebhookSignatureHeader=X-Rio-Signature, got %s", cfg.RioWebhookSignatureHeader)
-	}
 }
 
 func TestLoad_EnvOverrides(t *testing.T) {
@@ -75,10 +73,8 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	t.Setenv("PG_MAX_CONNS", "25")
 	t.Setenv("HTTP_READ_TIMEOUT", "30s")
 	t.Setenv("HTTP_BODY_LIMIT", "2097152")
-	t.Setenv("RIO_WEBHOOK_SECRET", "my-secret")
-	t.Setenv("RIO_WEBHOOK_SIGNATURE_HEADER", "X-Custom-Sig")
 
-	cfg := Load()
+	cfg := Load(context.Background())
 
 	if cfg.ServiceName != "test-service" {
 		t.Errorf("expected ServiceName=test-service, got %s", cfg.ServiceName)
@@ -112,12 +108,6 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	}
 	if cfg.HTTPBodyLimit != 2097152 {
 		t.Errorf("expected HTTPBodyLimit=2097152, got %d", cfg.HTTPBodyLimit)
-	}
-	if cfg.RioWebhookSecret != "my-secret" {
-		t.Errorf("expected RioWebhookSecret=my-secret, got %s", cfg.RioWebhookSecret)
-	}
-	if cfg.RioWebhookSignatureHeader != "X-Custom-Sig" {
-		t.Errorf("expected RioWebhookSignatureHeader=X-Custom-Sig, got %s", cfg.RioWebhookSignatureHeader)
 	}
 }
 

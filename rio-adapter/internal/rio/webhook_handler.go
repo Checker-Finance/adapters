@@ -18,14 +18,13 @@ import (
 
 // WebhookHandler handles incoming webhook events from Rio.
 type WebhookHandler struct {
-	logger    *zap.Logger
+	logger   *zap.Logger
 	publisher *publisher.Publisher
 	store     store.Store
 	poller    *Poller
 	tradeSync *legacy.TradeSyncWriter
 	service   *Service
-	secret    string
-	sigHeader string
+	resolver  ConfigResolver
 }
 
 // NewWebhookHandler creates a new WebhookHandler.
@@ -36,12 +35,8 @@ func NewWebhookHandler(
 	poller *Poller,
 	tradeSync *legacy.TradeSyncWriter,
 	service *Service,
-	secret string,
-	sigHeader string,
+	resolver ConfigResolver,
 ) *WebhookHandler {
-	if strings.TrimSpace(sigHeader) == "" {
-		sigHeader = "X-Rio-Signature"
-	}
 	return &WebhookHandler{
 		logger:    logger,
 		publisher: pub,
@@ -49,25 +44,14 @@ func NewWebhookHandler(
 		poller:    poller,
 		tradeSync: tradeSync,
 		service:   service,
-		secret:    secret,
-		sigHeader: sigHeader,
+		resolver:  resolver,
 	}
 }
 
 // HandleOrderWebhook processes order status change webhooks from Rio.
 // POST /webhooks/rio/orders
 func (h *WebhookHandler) HandleOrderWebhook(c *fiber.Ctx) error {
-	if h.secret != "" {
-		signature := c.Get(h.sigHeader)
-		if signature == "" || !validateWebhookSignature(h.secret, signature, c.Body()) {
-			h.logger.Warn("rio.webhook.invalid_signature",
-				zap.String("header", h.sigHeader))
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "invalid signature",
-			})
-		}
-	}
-
+	// Parse body first so we can identify the client for per-client signature validation.
 	var event RioOrderWebhookEvent
 	if err := c.BodyParser(&event); err != nil {
 		h.logger.Warn("rio.webhook.parse_error",
@@ -76,6 +60,28 @@ func (h *WebhookHandler) HandleOrderWebhook(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid payload",
 		})
+	}
+
+	// Validate HMAC signature using the per-client webhook secret (if configured).
+	if h.resolver != nil {
+		clientID := event.Data.ClientReferenceID
+		if clientID == "" {
+			clientID = event.Data.UserID
+		}
+		if clientID != "" {
+			if clientCfg, err := h.resolver.Resolve(c.UserContext(), clientID); err == nil && clientCfg.WebhookSecret != "" {
+				sigHeader := clientCfg.WebhookSigHeader
+				signature := c.Get(sigHeader)
+				if signature == "" || !validateWebhookSignature(clientCfg.WebhookSecret, signature, c.Body()) {
+					h.logger.Warn("rio.webhook.invalid_signature",
+						zap.String("client", clientID),
+						zap.String("header", sigHeader))
+					return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+						"error": "invalid signature",
+					})
+				}
+			}
+		}
 	}
 
 	order := event.Data

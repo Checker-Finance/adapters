@@ -12,9 +12,11 @@ import (
 
 func TestParseXFXConfig_Valid(t *testing.T) {
 	m := map[string]string{
-		"client_id":     "my-client-id",
-		"client_secret": "my-client-secret",
-		"base_url":      "https://dev-api.xfx.io",
+		"client_id":      "my-client-id",
+		"client_secret":  "my-client-secret",
+		"base_url":       "https://dev-api.xfx.io",
+		"auth0_endpoint": "https://dev.auth0.com/oauth/token",
+		"auth0_audience": "https://api.xfx.io",
 	}
 
 	cfg, err := parseXFXConfig(m)
@@ -22,6 +24,8 @@ func TestParseXFXConfig_Valid(t *testing.T) {
 	assert.Equal(t, "my-client-id", cfg.ClientID)
 	assert.Equal(t, "my-client-secret", cfg.ClientSecret)
 	assert.Equal(t, "https://dev-api.xfx.io", cfg.BaseURL)
+	assert.Equal(t, "https://dev.auth0.com/oauth/token", cfg.Auth0Endpoint)
+	assert.Equal(t, "https://api.xfx.io", cfg.Auth0Audience)
 }
 
 func TestParseXFXConfig_MissingClientID(t *testing.T) {
@@ -63,12 +67,40 @@ func TestParseXFXConfig_EmptyMap(t *testing.T) {
 	assert.Contains(t, err.Error(), "client_id")
 }
 
+func TestParseXFXConfig_MissingAuth0Endpoint(t *testing.T) {
+	m := map[string]string{
+		"client_id":      "my-client-id",
+		"client_secret":  "my-client-secret",
+		"base_url":       "https://dev-api.xfx.io",
+		"auth0_audience": "https://api.xfx.io",
+	}
+
+	_, err := parseXFXConfig(m)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "auth0_endpoint")
+}
+
+func TestParseXFXConfig_MissingAuth0Audience(t *testing.T) {
+	m := map[string]string{
+		"client_id":      "my-client-id",
+		"client_secret":  "my-client-secret",
+		"base_url":       "https://dev-api.xfx.io",
+		"auth0_endpoint": "https://dev.auth0.com/oauth/token",
+	}
+
+	_, err := parseXFXConfig(m)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "auth0_audience")
+}
+
 func TestParseXFXConfig_ExtraFieldsIgnored(t *testing.T) {
 	m := map[string]string{
-		"client_id":     "my-client-id",
-		"client_secret": "my-client-secret",
-		"base_url":      "https://dev-api.xfx.io",
-		"extra_field":   "this-is-ignored",
+		"client_id":      "my-client-id",
+		"client_secret":  "my-client-secret",
+		"base_url":       "https://dev-api.xfx.io",
+		"auth0_endpoint": "https://dev.auth0.com/oauth/token",
+		"auth0_audience": "https://api.xfx.io",
+		"extra_field":    "this-is-ignored",
 	}
 
 	cfg, err := parseXFXConfig(m)

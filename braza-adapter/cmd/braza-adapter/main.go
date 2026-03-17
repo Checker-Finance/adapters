@@ -32,7 +32,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	// --- Load configuration ---
-	cfg := config.Load()
+	cfg := config.Load(ctx)
 
 	logger.Init(cfg.ServiceName, cfg.Env, cfg.LogLevel)
 	logg := logger.S()
@@ -131,7 +131,7 @@ func main() {
 		TradeSync: tradeSyncWriter,
 	}
 
-	api.RegisterRoutes(app, h, ph, oh)
+	api.RegisterRoutes(app, nc, st, h, ph, oh)
 
 	go func() {
 		logg.Infof("HTTP API listening on :%d", cfg.Port)

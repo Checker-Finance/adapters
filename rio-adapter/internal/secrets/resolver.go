@@ -47,10 +47,17 @@ func (r *AWSResolver) DiscoverClients(ctx context.Context) ([]string, error) {
 
 // parseRioConfig extracts a RioClientConfig from the raw AWS secret map.
 func parseRioConfig(m map[string]string) (rio.RioClientConfig, error) {
+	sigHeader := m["webhook_sig_header"]
+	if sigHeader == "" {
+		sigHeader = "X-Rio-Signature"
+	}
 	cfg := rio.RioClientConfig{
-		APIKey:  m["api_key"],
-		BaseURL: m["base_url"],
-		Country: m["country"],
+		APIKey:           m["api_key"],
+		BaseURL:          m["base_url"],
+		Country:          m["country"],
+		WebhookURL:       m["webhook_url"],
+		WebhookSecret:    m["webhook_secret"],
+		WebhookSigHeader: sigHeader,
 	}
 	if cfg.APIKey == "" {
 		return rio.RioClientConfig{}, fmt.Errorf("missing required field 'api_key'")

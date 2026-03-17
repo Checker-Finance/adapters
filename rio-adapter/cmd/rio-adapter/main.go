@@ -28,7 +28,7 @@ func main() {
 	defer stop()
 
 	// --- Load configuration ---
-	cfg := config.Load()
+	cfg := config.Load(ctx)
 	cfg.ServiceName = "rio-adapter"
 	cfg.Venue = "rio"
 
@@ -136,8 +136,7 @@ func main() {
 		poller,
 		tradeSyncWriter,
 		rioSvc,
-		cfg.RioWebhookSecret,
-		cfg.RioWebhookSignatureHeader,
+		resolver,
 	)
 
 	// --- Fiber HTTP Server ---
@@ -160,7 +159,9 @@ func main() {
 		TradeSync: tradeSyncWriter,
 	}
 
-	api.RegisterRoutes(app, nc, st, rioHandler, orderResolveHandler, webhookHandler)
+	productsHandler := api.NewProductsHandler(st, cfg.Venue, logg.Desugar())
+	balanceHandler := api.NewBalanceHandler(st, logg.Desugar())
+	api.RegisterRoutes(app, nc, st, rioHandler, orderResolveHandler, webhookHandler, productsHandler, balanceHandler)
 
 	// Start HTTP server
 	serverReady := make(chan struct{})
@@ -172,19 +173,13 @@ func main() {
 		}
 	}()
 
-	// --- Register webhook with Rio (if URL configured) ---
-	if cfg.RioWebhookURL != "" {
-		go func() {
-			<-serverReady // wait for HTTP server to start
-			if err := rioSvc.RegisterOrderWebhook(ctx, cfg.RioWebhookURL); err != nil {
-				logg.Warnw("failed to register webhook with Rio",
-					"error", err,
-					"url", cfg.RioWebhookURL)
-			}
-		}()
-	} else {
-		logg.Warn("RIO_WEBHOOK_URL not configured; webhooks disabled, using polling only")
-	}
+	// --- Register webhooks with Rio for each configured client ---
+	go func() {
+		<-serverReady // wait for HTTP server to start
+		if err := rioSvc.RegisterOrderWebhook(ctx); err != nil {
+			logg.Warnw("failed to register webhooks with Rio", "error", err)
+		}
+	}()
 
 	// --- Main process stays alive until interrupted ---
 	logg.Infow("[rio-adapter] running",

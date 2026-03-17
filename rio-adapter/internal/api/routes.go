@@ -16,6 +16,8 @@ func RegisterRoutes(app *fiber.App, nc *nats.Conn, st store.Store,
 	rioHandler *RioHandler,
 	orderResolveHandler *OrderResolveHandler,
 	webhookHandler *rio.WebhookHandler,
+	productsHandler *ProductsHandler,
+	balanceHandler *BalanceHandler,
 ) {
 	app.Get("/metrics", adaptor.HTTPHandler(promhttp.Handler()))
 
@@ -54,6 +56,8 @@ func RegisterRoutes(app *fiber.App, nc *nats.Conn, st store.Store,
 
 	// API routes
 	v1 := app.Group("/api/v1")
+	v1.Get("/products", productsHandler.ListProducts)
+	v1.Get("/balances/:client_id", balanceHandler.GetBalances)
 	v1.Post("/quotes", rioHandler.CreateRFQHandler)
 	v1.Post("/orders", rioHandler.ExecuteRFQHandler)
 	v1.Post("/resolve-order/:quoteId", orderResolveHandler.ResolveOrder)

@@ -14,5 +14,3 @@ data:
   INBOUND_SUBJECT: "cmd.lp.quote_request.v1.XFX"
   OUTBOUND_SUBJECT: "evt.lp.quote_response.v1.XFX"
   AWS_REGION: "us-east-2"
-  AUTH0_ENDPOINT: ""
-  AUTH0_AUDIENCE: ""
