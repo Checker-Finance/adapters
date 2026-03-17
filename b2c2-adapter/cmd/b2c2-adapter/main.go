@@ -3,15 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 
+	b2c2api "github.com/Checker-Finance/adapters/b2c2-adapter/internal/api"
 	"github.com/Checker-Finance/adapters/b2c2-adapter/internal/b2c2"
 	b2c2nats "github.com/Checker-Finance/adapters/b2c2-adapter/internal/nats"
 	internalsecrets "github.com/Checker-Finance/adapters/b2c2-adapter/internal/secrets"
@@ -93,12 +94,15 @@ func main() {
 	}
 	defer consumer.Drain()
 
-	// --- Minimal health endpoint ---
-	healthServer := startHealthServer(cfg.HealthPort, logg)
-	defer func() {
-		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = healthServer.Shutdown(shutCtx)
+	// --- Fiber HTTP server ---
+	app := fiber.New(fiber.Config{DisableStartupMessage: true})
+	handler := b2c2api.NewB2C2Handler(logg, service)
+	b2c2api.RegisterRoutes(app, handler, nc)
+
+	go func() {
+		if err := app.Listen(fmt.Sprintf(":%d", cfg.HealthPort)); err != nil {
+			logg.Error("fiber server error", zap.Error(err))
+		}
 	}()
 
 	logg.Info("b2c2-adapter started successfully",
@@ -108,27 +112,10 @@ func main() {
 
 	<-ctx.Done()
 	logg.Info("shutdown signal received, stopping b2c2-adapter...")
-}
 
-func startHealthServer(port int, logg *zap.Logger) *http.Server {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	})
-
-	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", port),
-		Handler:      mux,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 5 * time.Second,
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
+		logg.Error("fiber shutdown error", zap.Error(err))
 	}
-
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logg.Error("health server error", zap.Error(err))
-		}
-	}()
-
-	return srv
 }

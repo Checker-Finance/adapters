@@ -3,6 +3,8 @@ package b2c2
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -27,6 +29,66 @@ func NewService(logger *zap.Logger, client *Client, resolver ConfigResolver, pub
 	}
 }
 
+// CreateRFQ requests a quote from B2C2. pair is in canonical format (e.g. "usd:btc").
+func (s *Service) CreateRFQ(ctx context.Context, clientID, pair, side, quantity, clientRFQID string) (*RFQResponse, error) {
+	cfg, err := s.resolver.Resolve(ctx, clientID)
+	if err != nil {
+		return nil, fmt.Errorf("b2c2.create_rfq: resolve config for %q: %w", clientID, err)
+	}
+	req := &RFQRequest{
+		Instrument:  ToB2C2Instrument(pair),
+		Side:        strings.ToLower(side),
+		Quantity:    quantity,
+		ClientRFQID: clientRFQID,
+	}
+	resp, err := s.client.RequestQuote(ctx, cfg, req)
+	if err != nil {
+		return nil, fmt.Errorf("b2c2.create_rfq: %w", err)
+	}
+	return resp, nil
+}
+
+// ExecuteRFQ submits a FOK order to B2C2. pair is in canonical format (e.g. "usd:btc").
+func (s *Service) ExecuteRFQ(ctx context.Context, clientID, pair, side, quantity, price, rfqID, clientOrderID string) (*OrderResponse, error) {
+	cfg, err := s.resolver.Resolve(ctx, clientID)
+	if err != nil {
+		return nil, fmt.Errorf("b2c2.execute_rfq: resolve config for %q: %w", clientID, err)
+	}
+	req := &OrderRequest{
+		Instrument:    ToB2C2Instrument(pair),
+		Side:          strings.ToLower(side),
+		Quantity:      quantity,
+		Price:         price,
+		OrderType:     "FOK",
+		RFQID:         rfqID,
+		ClientOrderID: clientOrderID,
+		ValidUntil:    time.Now().UTC().Add(10 * time.Second).Format(time.RFC3339),
+	}
+	resp, err := s.client.ExecuteOrder(ctx, cfg, req)
+	if err != nil {
+		return nil, fmt.Errorf("b2c2.execute_rfq: %w", err)
+	}
+	return resp, nil
+}
+
+// GetBalance fetches the account balance for a client.
+func (s *Service) GetBalance(ctx context.Context, clientID string) (BalanceResponse, error) {
+	cfg, err := s.resolver.Resolve(ctx, clientID)
+	if err != nil {
+		return nil, fmt.Errorf("b2c2.get_balance: resolve config for %q: %w", clientID, err)
+	}
+	return s.client.GetBalance(ctx, cfg)
+}
+
+// GetProducts fetches the list of available trading instruments from B2C2.
+func (s *Service) GetProducts(ctx context.Context, clientID string) ([]Instrument, error) {
+	cfg, err := s.resolver.Resolve(ctx, clientID)
+	if err != nil {
+		return nil, fmt.Errorf("b2c2.get_products: resolve config for %q: %w", clientID, err)
+	}
+	return s.client.GetInstruments(ctx, cfg)
+}
+
 // HandleRFQCommand processes a SubmitRequestForQuoteCommand:
 // resolves client config → calls B2C2 RFQ API → publishes QuoteArrivedEvent.
 func (s *Service) HandleRFQCommand(ctx context.Context, cmd *SubmitRequestForQuoteCommand) error {
@@ -38,15 +100,9 @@ func (s *Service) HandleRFQCommand(ctx context.Context, cmd *SubmitRequestForQuo
 		zap.String("quantity", cmd.Quantity),
 	)
 
-	cfg, err := s.resolver.Resolve(ctx, clientID)
+	resp, err := s.CreateRFQ(ctx, clientID, cmd.InstrumentPair, cmd.Side, cmd.Quantity, cmd.ID)
 	if err != nil {
-		return fmt.Errorf("b2c2.rfq: resolve client config for %q: %w", clientID, err)
-	}
-
-	req := ToRFQRequest(cmd)
-	resp, err := s.client.RequestQuote(ctx, cfg, req)
-	if err != nil {
-		return fmt.Errorf("b2c2.rfq: request quote: %w", err)
+		return fmt.Errorf("b2c2.rfq: %w", err)
 	}
 
 	s.logger.Info("b2c2.rfq.received_price",
@@ -73,15 +129,9 @@ func (s *Service) HandleOrderCommand(ctx context.Context, cmd *SubmitOrderComman
 		zap.String("side", cmd.Side),
 	)
 
-	cfg, err := s.resolver.Resolve(ctx, cmd.ClientID)
+	resp, err := s.ExecuteRFQ(ctx, cmd.ClientID, cmd.InstrumentPair, cmd.Side, cmd.Quantity, cmd.Price, cmd.RequestForQuoteID, cmd.ClientOrderID)
 	if err != nil {
-		return fmt.Errorf("b2c2.order: resolve client config for %q: %w", cmd.ClientID, err)
-	}
-
-	req := ToOrderRequest(cmd)
-	resp, err := s.client.ExecuteOrder(ctx, cfg, req)
-	if err != nil {
-		return fmt.Errorf("b2c2.order: execute order: %w", err)
+		return fmt.Errorf("b2c2.order: %w", err)
 	}
 
 	if resp.ExecutedPrice != nil {

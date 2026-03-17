@@ -3,16 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/publisher"
+	kiiexapi "github.com/Checker-Finance/adapters/kiiex-adapter/internal/api"
 	"github.com/Checker-Finance/adapters/kiiex-adapter/internal/config"
 	"github.com/Checker-Finance/adapters/kiiex-adapter/internal/instruments"
 	kiinats "github.com/Checker-Finance/adapters/kiiex-adapter/internal/nats"
@@ -107,17 +108,20 @@ func main() {
 	}
 	defer consumer.Drain()
 
-	// --- Minimal health endpoint ---
-	healthServer := startHealthServer(cfg.ServerPort, logg)
-	defer func() {
-		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = healthServer.Shutdown(shutCtx)
+	// --- Fiber HTTP server ---
+	app := fiber.New(fiber.Config{DisableStartupMessage: true})
+	handler := kiiexapi.NewKiiexHandler(logg, orderService)
+	kiiexapi.RegisterRoutes(app, handler, nc)
+
+	go func() {
+		if err := app.Listen(fmt.Sprintf(":%d", cfg.ServerPort)); err != nil {
+			logg.Error("fiber server error", zap.Error(err))
+		}
 	}()
 
 	logg.Info("kiiex-adapter started successfully",
 		zap.String("natsURL", cfg.NATSURL),
-		zap.Int("healthPort", cfg.ServerPort),
+		zap.Int("serverPort", cfg.ServerPort),
 	)
 
 	<-ctx.Done()
@@ -126,6 +130,10 @@ func main() {
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
+
+	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
+		logg.Error("fiber shutdown error", zap.Error(err))
+	}
 
 	tradeStatusService.Stop()
 	if err := orderService.Close(); err != nil {
@@ -138,27 +146,4 @@ func main() {
 	default:
 		logg.Info("Graceful shutdown completed")
 	}
-}
-
-func startHealthServer(port int, logg *zap.Logger) *http.Server {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	})
-
-	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", port),
-		Handler:      mux,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 5 * time.Second,
-	}
-
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logg.Error("health server error", zap.Error(err))
-		}
-	}()
-
-	return srv
 }
