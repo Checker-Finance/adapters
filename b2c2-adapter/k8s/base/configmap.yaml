@@ -4,7 +4,7 @@ metadata:
   name: b2c2-adapter-config
   namespace: b2c2-adapter
 data:
-  ENV: "prod"
+  ENV: "base"
   AWS_REGION: "us-east-2"
   LOG_LEVEL: "info"
   HEALTH_PORT: "9050"

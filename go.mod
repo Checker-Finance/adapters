@@ -14,7 +14,6 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/nats-io/nats.go v1.47.0
 	github.com/prometheus/client_golang v1.23.2
-	github.com/rabbitmq/amqp091-go v1.9.0
 	github.com/redis/go-redis/v9 v9.16.0
 	github.com/shopspring/decimal v1.3.1
 	github.com/stretchr/testify v1.11.1

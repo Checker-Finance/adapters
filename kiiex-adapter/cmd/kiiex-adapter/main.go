@@ -2,17 +2,21 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 
+	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/kiiex-adapter/internal/config"
 	"github.com/Checker-Finance/adapters/kiiex-adapter/internal/instruments"
+	kiinats "github.com/Checker-Finance/adapters/kiiex-adapter/internal/nats"
 	"github.com/Checker-Finance/adapters/kiiex-adapter/internal/order"
-	"github.com/Checker-Finance/adapters/kiiex-adapter/internal/rabbitmq"
 	kiisecrets "github.com/Checker-Finance/adapters/kiiex-adapter/internal/secrets"
 	"github.com/Checker-Finance/adapters/kiiex-adapter/internal/security"
 	"github.com/Checker-Finance/adapters/kiiex-adapter/internal/tracking"
@@ -25,7 +29,10 @@ import (
 var Version = "dev"
 
 func main() {
-	cfg := config.Load()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	cfg := config.Load(ctx)
 
 	pkglogger.Init("kiiex-adapter", cfg.Profile, cfg.LogLevel)
 	defer pkglogger.Sync()
@@ -39,9 +46,6 @@ func main() {
 		zap.String("env", cfg.Env),
 	)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	// --- AWS Secrets Manager provider ---
 	awsProvider, err := pkgsecrets.NewAWSProvider(cfg.AWSRegion)
 	if err != nil {
@@ -52,6 +56,7 @@ func main() {
 	cache := pkgsecrets.NewCache[security.Auth](cfg.CacheTTL)
 	stopCleaner := make(chan struct{})
 	go cache.StartCleaner(10*time.Minute, stopCleaner)
+	defer close(stopCleaner)
 
 	resolver := kiisecrets.NewAWSResolver(logg, cfg.Env, awsProvider, cache)
 
@@ -79,46 +84,53 @@ func main() {
 	tradeStatusService := tracking.NewTradeStatusService(orderService, eventBus, logg)
 	go tradeStatusService.Start(ctx)
 
-	// --- Create RabbitMQ consumer ---
-	consumer, err := rabbitmq.NewConsumer(cfg.RabbitMQURL, cfg.Provider, orderService, logg)
+	// --- Connect to NATS ---
+	nc, err := nats.Connect(cfg.NATSURL)
 	if err != nil {
-		logg.Fatal("Failed to create RabbitMQ consumer", zap.Error(err))
+		logg.Fatal("Failed to connect to NATS", zap.Error(err))
 	}
-	if err := consumer.Start(ctx); err != nil {
-		logg.Fatal("Failed to start RabbitMQ consumer", zap.Error(err))
-	}
+	defer nc.Close()
 
-	// --- Create RabbitMQ publisher ---
-	publisher, err := rabbitmq.NewPublisher(cfg.RabbitMQURL, eventBus, logg)
+	// --- Publisher ---
+	pub, err := publisher.New(nc, "evt.kiiex", "KIIEX_EVENTS")
 	if err != nil {
-		logg.Fatal("Failed to create RabbitMQ publisher", zap.Error(err))
+		logg.Fatal("Failed to init NATS publisher", zap.Error(err))
 	}
 
-	logg.Info("Application started successfully")
+	// --- NATS publisher (subscribes to eventbus, forwards to NATS) ---
+	_ = kiinats.NewNATSPublisher(pub, eventBus, logg)
 
-	// Wait for shutdown signal
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
+	// --- NATS command consumer ---
+	consumer := kiinats.NewCommandConsumer(nc, orderService, logg)
+	if err := consumer.Subscribe(ctx, cfg.InboundSubject, cfg.CancelSubject); err != nil {
+		logg.Fatal("Failed to subscribe NATS command consumer", zap.Error(err))
+	}
+	defer consumer.Drain()
+
+	// --- Minimal health endpoint ---
+	healthServer := startHealthServer(cfg.ServerPort, logg)
+	defer func() {
+		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = healthServer.Shutdown(shutCtx)
+	}()
+
+	logg.Info("kiiex-adapter started successfully",
+		zap.String("natsURL", cfg.NATSURL),
+		zap.Int("healthPort", cfg.ServerPort),
+	)
+
+	<-ctx.Done()
 
 	logg.Info("Shutdown signal received, starting graceful shutdown...")
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
-	close(stopCleaner)
 	tradeStatusService.Stop()
-	if err := consumer.Close(); err != nil {
-		logg.Error("failed to close consumer", zap.Error(err))
-	}
-	if err := publisher.Close(); err != nil {
-		logg.Error("failed to close publisher", zap.Error(err))
-	}
 	if err := orderService.Close(); err != nil {
 		logg.Error("failed to close order service sessions", zap.Error(err))
 	}
-
-	cancel()
 
 	select {
 	case <-shutdownCtx.Done():
@@ -126,4 +138,27 @@ func main() {
 	default:
 		logg.Info("Graceful shutdown completed")
 	}
+}
+
+func startHealthServer(port int, logg *zap.Logger) *http.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	srv := &http.Server{
+		Addr:         fmt.Sprintf(":%d", port),
+		Handler:      mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 5 * time.Second,
+	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logg.Error("health server error", zap.Error(err))
+		}
+	}()
+
+	return srv
 }

@@ -9,12 +9,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/b2c2-adapter/internal/b2c2"
-	b2c2rabbitmq "github.com/Checker-Finance/adapters/b2c2-adapter/internal/rabbitmq"
+	b2c2nats "github.com/Checker-Finance/adapters/b2c2-adapter/internal/nats"
 	internalsecrets "github.com/Checker-Finance/adapters/b2c2-adapter/internal/secrets"
 	"github.com/Checker-Finance/adapters/b2c2-adapter/pkg/config"
+	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/internal/rate"
 	pkglogger "github.com/Checker-Finance/adapters/pkg/logger"
 	pkgsecrets "github.com/Checker-Finance/adapters/pkg/secrets"
@@ -27,7 +29,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cfg := config.Load()
+	cfg := config.Load(ctx)
 
 	pkglogger.Init(cfg.ServiceName, cfg.Env, cfg.LogLevel)
 	defer pkglogger.Sync()
@@ -66,33 +68,30 @@ func main() {
 	// --- B2C2 HTTP client ---
 	client := b2c2.NewClient(logg, rateMgr)
 
-	// --- RabbitMQ publisher ---
-	publisher, err := b2c2rabbitmq.NewPublisher(cfg.RabbitMQURL, logg)
+	// --- Connect to NATS ---
+	nc, err := nats.Connect(cfg.NATSURL)
 	if err != nil {
-		logg.Fatal("failed to create RabbitMQ publisher", zap.Error(err))
+		logg.Fatal("failed to connect to NATS", zap.Error(err))
 	}
-	defer func() {
-		if err := publisher.Close(); err != nil {
-			logg.Error("failed to close publisher", zap.Error(err))
-		}
-	}()
+	defer nc.Close()
+
+	// --- Publisher ---
+	pub, err := publisher.New(nc, "evt.b2c2", "B2C2_EVENTS")
+	if err != nil {
+		logg.Fatal("failed to init NATS publisher", zap.Error(err))
+	}
+
+	natsPublisher := b2c2nats.NewPublisher(pub, logg)
 
 	// --- B2C2 service ---
-	service := b2c2.NewService(logg, client, resolver, publisher)
+	service := b2c2.NewService(logg, client, resolver, natsPublisher)
 
-	// --- RabbitMQ consumer ---
-	consumer, err := b2c2rabbitmq.NewConsumer(cfg.RabbitMQURL, service, logg)
-	if err != nil {
-		logg.Fatal("failed to create RabbitMQ consumer", zap.Error(err))
+	// --- NATS command consumer ---
+	consumer := b2c2nats.NewCommandConsumer(nc, service, logg)
+	if err := consumer.Subscribe(ctx, cfg.InboundRFQSubject, cfg.InboundOrderSubject, cfg.InboundCancelSubject); err != nil {
+		logg.Fatal("failed to subscribe NATS command consumer", zap.Error(err))
 	}
-	if err := consumer.Start(ctx); err != nil {
-		logg.Fatal("failed to start RabbitMQ consumer", zap.Error(err))
-	}
-	defer func() {
-		if err := consumer.Close(); err != nil {
-			logg.Error("failed to close consumer", zap.Error(err))
-		}
-	}()
+	defer consumer.Drain()
 
 	// --- Minimal health endpoint ---
 	healthServer := startHealthServer(cfg.HealthPort, logg)
@@ -103,7 +102,7 @@ func main() {
 	}()
 
 	logg.Info("b2c2-adapter started successfully",
-		zap.String("amqpURL", cfg.RabbitMQURL),
+		zap.String("natsURL", cfg.NATSURL),
 		zap.Int("healthPort", cfg.HealthPort),
 	)
 
