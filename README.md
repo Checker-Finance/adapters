@@ -1,42 +1,76 @@
 # Checker Adapters
 
-Monorepo for Checker trading platform adapters. Each adapter integrates with an external venue (Rio, Braza, etc.) and exposes a consistent interface to the rest of the stack.
+Monorepo of venue adapters — Go microservices that integrate Checker with external trading venues, normalize data to canonical models, and publish events to NATS JetStream.
+
+All adapters share a single root Go module (`github.com/Checker-Finance/adapters`). Shared libraries live in `pkg/` and `internal/`.
 
 ## Adapters
 
-| Adapter | Description |
-|---------|-------------|
-| [rio-adapter](./rio-adapter/) | Integrates with Rio Bank's FXCore API. Quote creation, order execution, webhooks, NATS events. |
-| [braza-adapter](./braza-adapter/) | Braza venue adapter. Stub in place; replace with full implementation from standalone repo when ready. |
+| Adapter | Venue | Port | Description |
+|---------|-------|------|-------------|
+| [rio-adapter](./rio-adapter/) | Rio Bank FXCore | 9010 | REST + NATS + Postgres/Redis; webhooks + polling |
+| [braza-adapter](./braza-adapter/) | Braza FX | 9010 | REST + NATS + Postgres/Redis; polling only |
+| [xfx-adapter](./xfx-adapter/) | XFX Trading | 9030 | REST + NATS + Postgres/Redis; OAuth2/Auth0; polling only |
+| [zodia-adapter](./zodia-adapter/) | Zodia Markets | 9040 | REST + NATS + Postgres/Redis; HMAC; webhooks + polling |
+| [kiiex-adapter](./kiiex-adapter/) | Kiiex/AlphaPoint | 8082 | NATS + AlphaPoint WebSocket; no Postgres/Redis |
+| [b2c2-adapter](./b2c2-adapter/) | B2C2 Markets | 9050 | NATS; static token; FOK sync orders; no Postgres/Redis |
 
-## Repository layout
+For a full breakdown of HTTP endpoints and NATS subjects for each adapter, see [docs/adapters.md](./docs/adapters.md).
+
+## Repository Layout
 
 ```
 adapters/
-├── rio-adapter/       # Rio adapter service
-├── braza-adapter/     # Braza adapter (stub + k8s/CI/ArgoCD)
-├── scripts/          # OIDC and repo setup
-└── README.md
+├── go.mod / go.sum          # Single root module
+├── pkg/                     # Shared public packages
+│   ├── model/               # Canonical domain models
+│   ├── secrets/             # Generic TTL cache + AWS Secrets Manager provider
+│   ├── logger/              # Structured zap logger
+│   └── utils/               # DSN masking, etc.
+├── internal/                # Shared internal packages
+│   ├── store/               # Hybrid Redis-first, Postgres-backed persistence
+│   ├── publisher/           # NATS JetStream event publishing
+│   ├── legacy/              # Trade sync writer + RFQ sweeper
+│   ├── rate/                # Rate limiter for venue API calls
+│   ├── metrics/             # Shared Prometheus metrics
+│   ├── secrets/             # Generic AWSResolver[T any]
+│   └── jobs/                # Background jobs (summary refresher)
+├── rio-adapter/
+├── braza-adapter/
+├── xfx-adapter/
+├── zodia-adapter/
+├── kiiex-adapter/
+├── b2c2-adapter/
+├── docs/                    # Reference documentation
+└── scripts/                 # OIDC AWS setup scripts
 ```
 
 ## Development
 
-Each adapter is self-contained with its own `go.mod`, Dockerfile, and k8s manifests. Work from the adapter directory:
+Run from any adapter directory:
 
 ```bash
-cd rio-adapter
-make build
-make test
+make build        # Compile binary
+make test         # Run all tests with race detector (root module scope)
+make lint         # Run golangci-lint
+make up           # Start NATS + Redis via Docker Compose
+make down         # Stop containers
+make docker-build # Build Docker image (repo root as build context)
 ```
 
-See each adapter's README for configuration and run instructions.
+Run all tests from the repo root:
+
+```bash
+go test -race -count=1 ./...
+```
 
 ## CI / Deployment
 
-- **rio-adapter:** Build and push from `rio-adapter/`; ArgoCD apps point at this repo with paths `rio-adapter/k8s/overlays/dev` and `rio-adapter/k8s/overlays/prod`.
-- **braza-adapter:** Workflow `build-and-push-braza-adapter.yml`; ArgoCD apps at `braza-adapter/k8s/overlays/dev` and `braza-adapter/k8s/overlays/prod`. Set GitHub secret `ECR_REPOSITORY_BRAZA` (e.g. `braza-adapter`) and create ECR repo; create AWS Secrets Manager entries `braza-adapter/dev` and `braza-adapter/prod` with keys used by ExternalSecrets (see braza-adapter README).
+- **CI:** Each adapter has its own GitHub Actions workflow (`.github/workflows/build-and-push-<name>-adapter.yml`) triggered on push to `main`. Pipeline: tests + lint → Docker build → Trivy scan → push to ECR. Path filters cover the adapter directory and shared packages (`pkg/**`, `internal/**`, `go.mod`, `go.sum`).
+- **Auth:** OIDC — no long-lived AWS keys; IAM role assumed via GitHub Actions OIDC.
+- **Deployment:** Kubernetes via ArgoCD + Kustomize overlays (`k8s/overlays/dev`, `k8s/overlays/prod`). Secrets injected via External Secrets Operator from AWS Secrets Manager.
+- **Versioning:** `VERSION` file per adapter; Docker images tagged with short git SHA + `:latest`.
 
 ## History
 
-- **rio-adapter** was moved from [Checker-Finance/rio-adapter](https://github.com/Checker-Finance/rio-adapter). Last standalone release: tag `v1.0.0-pre-commons`.
-- **braza-adapter** will be moved from its standalone repo; tag with `<version>-pre-commons` or `pre-commons` before the move.
+- **rio-adapter** moved from [Checker-Finance/rio-adapter](https://github.com/Checker-Finance/rio-adapter). Last standalone release: `v1.0.0-pre-commons`.
