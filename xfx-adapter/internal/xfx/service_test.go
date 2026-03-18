@@ -2,6 +2,9 @@ package xfx
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -336,6 +339,61 @@ func TestService_SyncTerminalTrade_NilPublisher(t *testing.T) {
 
 	// Should not panic
 	svc.syncTerminalTrade(context.Background(), trade)
+}
+
+// TestService_CreateRFQ_USDC_MXN_ZeroRate mirrors the production request observed in logs:
+//
+//	pair: "usdc/mxn" (lowercase, slash-delimited), side: "buy", amount: 500000
+//	XFX returned rate: 0 on the quote response.
+//
+// Verifies:
+//  1. Symbol is normalised to "USDC/MXN" before hitting the XFX API.
+//  2. Side is uppercased to "BUY".
+//  3. A rate:0 response is returned without error (caller decides how to handle it).
+func TestService_CreateRFQ_USDC_MXN_ZeroRate(t *testing.T) {
+	var capturedReq XFXQuoteRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.Equal(t, http.MethodPost, r.Method)
+		require.Equal(t, "/v1/customer/quotes", r.URL.Path)
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&capturedReq))
+		writeJSON(w, XFXQuoteResponse{
+			Success: true,
+			Quote: XFXQuote{
+				ID:         "8c64c8cf-7032-4f22-801d-64c3a9cb9ea7",
+				Symbol:     "USDC/MXN",
+				Side:       "BUY",
+				Quantity:   500000,
+				Price:      0, // rate: 0 as returned by XFX in production
+				ValidUntil: time.Now().Add(15 * time.Second).UTC().Format(time.RFC3339),
+				Status:     "ACTIVE",
+			},
+		})
+	}))
+	defer server.Close()
+
+	svc := newTestService(t, server.URL)
+
+	req := model.RFQRequest{
+		ClientID:     "test-client-id",
+		Side:         "buy",
+		CurrencyPair: "usdc/mxn", // lowercase as received from the API caller
+		Amount:       500000,
+	}
+
+	quote, err := svc.CreateRFQ(context.Background(), req)
+	require.NoError(t, err)
+
+	// Confirm what was sent to the XFX API
+	assert.Equal(t, "USDC/MXN", capturedReq.Symbol, "pair must be uppercased for XFX")
+	assert.Equal(t, "BUY", capturedReq.Side, "side must be uppercased for XFX")
+	assert.Equal(t, float64(500000), capturedReq.Quantity)
+
+	// Confirm the zero-rate response is surfaced without error
+	assert.Equal(t, "8c64c8cf-7032-4f22-801d-64c3a9cb9ea7", quote.ID)
+	assert.Equal(t, float64(0), quote.Price, "zero rate must be returned as-is")
+	assert.Equal(t, "USDC/MXN", quote.Instrument)
+	assert.Equal(t, "BUY", quote.Side)
 }
 
 func TestService_SyncTerminalTrade_NilTradeSyncWriter(t *testing.T) {
