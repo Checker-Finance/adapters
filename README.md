@@ -14,6 +14,7 @@ All adapters share a single root Go module (`github.com/Checker-Finance/adapters
 | [zodia-adapter](./zodia-adapter/) | Zodia Markets | 9040 | REST + NATS + Postgres/Redis; HMAC; webhooks + polling |
 | [kiiex-adapter](./kiiex-adapter/) | Kiiex/AlphaPoint | 8082 | NATS + AlphaPoint WebSocket; no Postgres/Redis |
 | [b2c2-adapter](./b2c2-adapter/) | B2C2 Markets | 9050 | NATS; static token; FOK sync orders; no Postgres/Redis |
+| [capa-adapter](./capa-adapter/) | Capa (LATAM ramp) | 9060 | REST + NATS + Postgres/Redis; static API key; webhooks + polling; cross/on/off-ramp |
 
 For a full breakdown of HTTP endpoints and NATS subjects for each adapter, see [docs/adapters.md](./docs/adapters.md).
 
@@ -41,6 +42,7 @@ adapters/
 ├── zodia-adapter/
 ├── kiiex-adapter/
 ├── b2c2-adapter/
+├── capa-adapter/
 ├── docs/                    # Reference documentation
 └── scripts/                 # OIDC AWS setup scripts
 ```

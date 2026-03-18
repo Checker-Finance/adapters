@@ -10,6 +10,7 @@ Complete reference for all adapters in this monorepo: HTTP endpoints, NATS subje
 - [Zodia](#zodia)
 - [Kiiex](#kiiex)
 - [B2C2](#b2c2)
+- [Capa](#capa)
 - [At a Glance](#at-a-glance)
 
 ---
@@ -197,6 +198,41 @@ Complete reference for all adapters in this monorepo: HTTP endpoints, NATS subje
 
 ---
 
+## Capa
+
+**Port:** `9060` (`CAPA_PORT`)
+**Auth:** Static API key per client (`partner-api-key` header) — resolved from AWS Secrets Manager at `{env}/{clientId}/capa`
+**Status tracking:** Webhooks (primary) + polling fallback (`CAPA_POLL_INTERVAL`, default 30s)
+**Transaction types:** Cross-ramp (fiat ↔ fiat), on-ramp (fiat → crypto), off-ramp (crypto → fiat) — routing determined by client config (`wallet_address` → on-ramp, `receiver_id` → off-ramp, neither → cross-ramp)
+**Supported pairs:** USD/MXN, USD/DOP, EUR/MXN, EUR/DOP, MXN/DOP, USD/USDC, USD/USDT, MXN/USDC, MXN/USDT, DOP/USDC, USDC/MXN, USDT/MXN, USDC/USD, USDT/USD, USDC/DOP (static, hardcoded)
+
+### HTTP Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Health check — reports NATS + store status |
+| `GET` | `/metrics` | Prometheus metrics |
+| `GET` | `/api/v1/products` | List supported pairs (static, hardcoded) |
+| `GET` | `/api/v1/balances/:client_id` | Client balances |
+| `POST` | `/api/v1/quotes` | Create RFQ |
+| `POST` | `/api/v1/orders` | Execute order |
+| `POST` | `/api/v1/resolve-order/:quoteId` | Resolve/finalize order |
+| `POST` | `/webhooks/capa/transactions` | Capa webhook (Redis dedup, 48h TTL; `X-Capa-Signature` / `X-Webhook-Signature`) |
+
+### NATS
+
+| Direction | Subject |
+|-----------|---------|
+| Inbound (quote request) | `cmd.lp.quote_request.v1.CAPA` |
+| Inbound (trade execute) | `cmd.lp.trade_execute.v1.CAPA` |
+| Outbound (quote response) | `evt.lp.quote_response.v1.CAPA` |
+| Outbound (interim) | `evt.trade.status_changed.v1.CAPA` |
+| Outbound (final) | `evt.trade.filled.v1.CAPA` |
+| Outbound (final) | `evt.trade.cancelled.v1.CAPA` |
+| Outbound (final) | `evt.trade.rejected.v1.CAPA` |
+
+---
+
 ## At a Glance
 
 | Adapter | Port | Webhooks | Products source | Status tracking | Auth model |
@@ -207,5 +243,6 @@ Complete reference for all adapters in this monorepo: HTTP endpoints, NATS subje
 | Zodia | 9040 | Yes | Dynamic | Webhook + poll | HMAC |
 | Kiiex | 8082 | No | — | WS events | HMAC (AlphaPoint) |
 | B2C2 | 9050 | No | Dynamic (B2C2 API) | Sync (FOK) | Static token |
+| Capa | 9060 | Yes | Static (hardcoded) | Webhook + poll | Static API key |
 
 \* Braza shares the same default port as Rio but is configured separately via `BRAZA_PORT`.

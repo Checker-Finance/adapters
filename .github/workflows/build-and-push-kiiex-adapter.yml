@@ -28,7 +28,7 @@ jobs:
         with:
           go-version: '1.25'
           cache-dependency-path: go.sum
-      - run: go test -race -count=1 ./kiiex-adapter/...
+      - run: go test -race -count=1 ./kiiex-adapter/... ./internal/... ./pkg/...
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
