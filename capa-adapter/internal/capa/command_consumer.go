@@ -1,0 +1,92 @@
+package capa
+
+import (
+	"context"
+	"encoding/json"
+	"time"
+
+	"github.com/Checker-Finance/adapters/pkg/model"
+	"github.com/nats-io/nats.go"
+	"go.uber.org/zap"
+)
+
+// CommandConsumer subscribes to NATS command subjects and routes them to the service.
+type CommandConsumer struct {
+	nc     *nats.Conn
+	svc    *Service
+	logger *zap.Logger
+	subs   []*nats.Subscription
+}
+
+// NewCommandConsumer creates a new CommandConsumer.
+func NewCommandConsumer(nc *nats.Conn, svc *Service, logger *zap.Logger) *CommandConsumer {
+	return &CommandConsumer{nc: nc, svc: svc, logger: logger}
+}
+
+// Subscribe registers NATS subscriptions for quote request and trade execute commands.
+// Messages are dispatched asynchronously; the handler goroutines inherit the provided context.
+func (c *CommandConsumer) Subscribe(ctx context.Context, quoteSubject, tradeSubject string) error {
+	subQ, err := c.nc.Subscribe(quoteSubject, func(msg *nats.Msg) {
+		var env model.Envelope
+		if err := json.Unmarshal(msg.Data, &env); err != nil {
+			c.logger.Error("capa.cmd.quote_request.unmarshal_failed", zap.Error(err))
+			return
+		}
+		var req model.QuoteRequest
+		if err := json.Unmarshal(env.Payload, &req); err != nil {
+			c.logger.Error("capa.cmd.quote_request.payload_failed",
+				zap.String("client", env.ClientID),
+				zap.Error(err))
+			return
+		}
+		msgCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		if err := c.svc.HandleQuoteRequest(msgCtx, env, req); err != nil {
+			c.logger.Error("capa.cmd.quote_request.handle_failed",
+				zap.String("client", env.ClientID),
+				zap.Error(err))
+		}
+	})
+	if err != nil {
+		return err
+	}
+	c.subs = append(c.subs, subQ)
+
+	subT, err := c.nc.Subscribe(tradeSubject, func(msg *nats.Msg) {
+		var env model.Envelope
+		if err := json.Unmarshal(msg.Data, &env); err != nil {
+			c.logger.Error("capa.cmd.trade_execute.unmarshal_failed", zap.Error(err))
+			return
+		}
+		var cmd model.TradeCommand
+		if err := json.Unmarshal(env.Payload, &cmd); err != nil {
+			c.logger.Error("capa.cmd.trade_execute.payload_failed",
+				zap.String("client", env.ClientID),
+				zap.Error(err))
+			return
+		}
+		msgCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if err := c.svc.HandleTradeExecute(msgCtx, env, cmd); err != nil {
+			c.logger.Error("capa.cmd.trade_execute.handle_failed",
+				zap.String("client", env.ClientID),
+				zap.Error(err))
+		}
+	})
+	if err != nil {
+		return err
+	}
+	c.subs = append(c.subs, subT)
+
+	c.logger.Info("capa.command_consumer.subscribed",
+		zap.String("quote_subject", quoteSubject),
+		zap.String("trade_subject", tradeSubject))
+	return nil
+}
+
+// Drain drains all active subscriptions gracefully.
+func (c *CommandConsumer) Drain() {
+	for _, sub := range c.subs {
+		_ = sub.Drain()
+	}
+}

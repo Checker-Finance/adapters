@@ -15,7 +15,7 @@ import (
 
 // newIntegrationConfig returns an XFXClientConfig from environment variables.
 // Skips the test if required env vars are not set.
-func newIntegrationConfig(t *testing.T) (*XFXClientConfig, string, string) {
+func newIntegrationConfig(t *testing.T) *XFXClientConfig {
 	t.Helper()
 
 	clientID := os.Getenv("XFX_CLIENT_ID")
@@ -28,25 +28,27 @@ func newIntegrationConfig(t *testing.T) (*XFXClientConfig, string, string) {
 	}
 
 	return &XFXClientConfig{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		BaseURL:      baseURL,
-	}, auth0Endpoint, auth0Audience
+		ClientID:      clientID,
+		ClientSecret:  clientSecret,
+		BaseURL:       baseURL,
+		Auth0Endpoint: auth0Endpoint,
+		Auth0Audience: auth0Audience,
+	}
 }
 
 func newIntegrationClient(t *testing.T) (*Client, *XFXClientConfig) {
 	t.Helper()
-	cfg, endpoint, audience := newIntegrationConfig(t)
+	cfg := newIntegrationConfig(t)
 	logger, _ := zap.NewDevelopment()
-	tokens := NewTokenManager(logger, endpoint, audience)
+	tokens := NewTokenManager(logger)
 	return NewClient(logger, rate.NewManager(rate.Config{RequestsPerSecond: 10, Burst: 20}), tokens), cfg
 }
 
 // TestIntegration_Auth verifies that Auth0 client credentials flow succeeds.
 func TestIntegration_Auth(t *testing.T) {
-	cfg, endpoint, audience := newIntegrationConfig(t)
+	cfg := newIntegrationConfig(t)
 	logger, _ := zap.NewDevelopment()
-	tokens := NewTokenManager(logger, endpoint, audience)
+	tokens := NewTokenManager(logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
