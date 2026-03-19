@@ -8,6 +8,6 @@ spec:
     app.kubernetes.io/name: kiiex-adapter
   ports:
     - name: health
-      port: 8082
+      port: 9070
       targetPort: health
       protocol: TCP

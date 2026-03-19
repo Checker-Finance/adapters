@@ -35,7 +35,7 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - name: health
-              containerPort: 8082
+              containerPort: 9070
               protocol: TCP
           envFrom:
             - configMapRef:

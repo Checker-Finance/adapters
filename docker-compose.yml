@@ -1,0 +1,146 @@
+services:
+  # ─── Infrastructure ───────────────────────────────────────────────────────────
+  nats:
+    image: nats:2.10-alpine
+    container_name: nats
+    restart: always
+    command: ["-js", "-sd", "/data/jetstream", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - natsdata:/data/jetstream
+    networks:
+      - checker_app-network
+
+  redis:
+    image: redis/redis-stack:7.4.0-v3
+    container_name: redis-stack
+    restart: always
+    ports:
+      - "6379:6379"
+      - "8001:8001"
+    volumes:
+      - redisdata:/data
+    networks:
+      - checker_app-network
+
+  # ─── Adapters ─────────────────────────────────────────────────────────────────
+  rio-adapter:
+    container_name: rio-adapter
+    image: 730335471935.dkr.ecr.us-east-2.amazonaws.com/rio-adapter:latest
+    restart: always
+    env_file: .env
+    environment:
+      NATS_URL: "nats://nats:4222"
+      REDIS_URL: "redis://redis-stack:6379"
+    ports:
+      - "9010:9010"
+    depends_on:
+      - nats
+      - redis
+    networks:
+      - checker_app-network
+
+  braza-adapter:
+    container_name: braza-adapter
+    image: 730335471935.dkr.ecr.us-east-2.amazonaws.com/braza-adapter:latest
+    restart: always
+    env_file: .env
+    environment:
+      BRAZA_PORT: "9020"
+      NATS_URL: "nats://nats:4222"
+      REDIS_URL: "redis://redis-stack:6379"
+    ports:
+      - "9020:9020"
+    depends_on:
+      - nats
+      - redis
+    networks:
+      - checker_app-network
+
+  xfx-adapter:
+    container_name: xfx-adapter
+    image: 730335471935.dkr.ecr.us-east-2.amazonaws.com/xfx-adapter:latest
+    restart: always
+    env_file: .env
+    environment:
+      NATS_URL: "nats://nats:4222"
+      REDIS_URL: "redis://redis-stack:6379"
+      # AUTH0_ENDPOINT and AUTH0_AUDIENCE come from .env
+    ports:
+      - "9030:9030"
+    depends_on:
+      - nats
+      - redis
+    networks:
+      - checker_app-network
+
+  zodia-adapter:
+    container_name: zodia-adapter
+    image: 730335471935.dkr.ecr.us-east-2.amazonaws.com/zodia-adapter:latest
+    restart: always
+    env_file: .env
+    environment:
+      NATS_URL: "nats://nats:4222"
+      REDIS_URL: "redis://redis-stack:6379"
+    ports:
+      - "9040:9040"
+    depends_on:
+      - nats
+      - redis
+    networks:
+      - checker_app-network
+
+  kiiex-adapter:
+    container_name: kiiex-adapter
+    image: 730335471935.dkr.ecr.us-east-2.amazonaws.com/kiiex-adapter:latest
+    restart: always
+    env_file: .env
+    environment:
+      NATS_URL: "nats://nats:4222"
+    ports:
+      - "9070:9070"
+    depends_on:
+      - nats
+    networks:
+      - checker_app-network
+
+  b2c2-adapter:
+    container_name: b2c2-adapter
+    image: 730335471935.dkr.ecr.us-east-2.amazonaws.com/b2c2-adapter:latest
+    restart: always
+    env_file: .env
+    environment:
+      NATS_URL: "nats://nats:4222"
+    ports:
+      - "9050:9050"
+    depends_on:
+      - nats
+    networks:
+      - checker_app-network
+
+  capa-adapter:
+    container_name: capa-adapter
+    image: 730335471935.dkr.ecr.us-east-2.amazonaws.com/capa-adapter:latest
+    restart: always
+    env_file: .env
+    environment:
+      NATS_URL: "nats://nats:4222"
+      REDIS_URL: "redis://redis-stack:6379"
+    ports:
+      - "9060:9060"
+    depends_on:
+      - nats
+      - redis
+    networks:
+      - checker_app-network
+
+networks:
+  checker_app-network:
+    driver: bridge
+    internal: false
+
+volumes:
+  natsdata:
+  redisdata:

@@ -35,7 +35,7 @@ func Load(ctx context.Context) *Config {
 
 	cfg := &Config{
 		ServiceName:       pkgconfig.GetEnv("SERVICE_NAME", "kiiex-adapter"),
-		ServerPort:        pkgconfig.GetEnvInt("SERVER_PORT", 8082),
+		ServerPort:        pkgconfig.GetEnvInt("SERVER_PORT", 9070),
 		WebSocketURL:      pkgconfig.GetEnv("KIIEX_WEBSOCKET_URL", "wss://api.kiire.alphaprod.net/WSGateway"),
 		NATSURL:           pkgconfig.GetEnv("NATS_URL", "nats://localhost:4222"),
 		InboundSubject:    pkgconfig.GetEnv("KIIEX_INBOUND_SUBJECT", "cmd.lp.trade_execute.v1.KIIEX"),

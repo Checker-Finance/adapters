@@ -8,7 +8,7 @@ data:
   ENV: "base"
   AWS_REGION: "us-east-2"
   LOG_LEVEL: "info"
-  SERVER_PORT: "8082"
+  SERVER_PORT: "9070"
   KIIEX_WEBSOCKET_URL: "wss://api.kiire.alphaprod.net/WSGateway"
   CACHE_TTL: "24h"
   KIIEX_INBOUND_SUBJECT: "cmd.lp.trade_execute.v1.KIIEX"
