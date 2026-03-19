@@ -4,6 +4,7 @@ package xfx
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -133,6 +134,63 @@ func TestIntegration_RequestQuote(t *testing.T) {
 	t.Logf("Quote obtained: id=%s symbol=%s side=%s quantity=%f price=%f validUntil=%s",
 		resp.Quote.ID, resp.Quote.Symbol, resp.Quote.Side,
 		resp.Quote.Quantity, resp.Quote.Price, resp.Quote.ValidUntil)
+}
+
+// TestIntegration_RequestQuote_OverCreditLimit intentionally exceeds the daily credit limit
+// to observe the raw error format XFX returns.
+func TestIntegration_RequestQuote_OverCreditLimit(t *testing.T) {
+	client, cfg := newIntegrationClient(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	resp, err := client.RequestQuote(ctx, cfg, &XFXQuoteRequest{
+		Symbol:   "USD/MXN",
+		Side:     "BUY",
+		Quantity: 2_000_000,
+	})
+	t.Logf("err=%v", err)
+	if resp != nil {
+		t.Logf("resp.Success=%v resp.Message=%q", resp.Success, resp.Message)
+		t.Logf("resp.Quote=%+v", resp.Quote)
+	}
+}
+
+// TestIntegration_RequestQuote_USDT_MXN_2M sends a 2,000,000 USDT/MXN BUY quote and logs
+// the full request, raw XFX response, and adapter result.
+func TestIntegration_RequestQuote_USDT_MXN_2M(t *testing.T) {
+	client, cfg := newIntegrationClient(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	req := &XFXQuoteRequest{
+		Symbol:   "USDT/MXN",
+		Side:     "BUY",
+		Quantity: 2_000_000,
+	}
+
+	reqJSON, _ := json.Marshal(req)
+	t.Logf("=== OUR REQUEST ===")
+	t.Logf("POST %s/v1/customer/quotes", cfg.BaseURL)
+	t.Logf("%s", reqJSON)
+
+	resp, err := client.RequestQuote(ctx, cfg, req)
+
+	t.Logf("=== XFX RESPONSE ===")
+	if resp != nil {
+		respJSON, _ := json.Marshal(resp)
+		t.Logf("%s", respJSON)
+	} else {
+		t.Logf("(nil — transport or auth error)")
+	}
+
+	t.Logf("=== ADAPTER RESPONSE ===")
+	if err != nil {
+		t.Logf("error: %v", err)
+	} else {
+		t.Logf("ok: quoteID=%s price=%f validUntil=%s", resp.Quote.ID, resp.Quote.Price, resp.Quote.ValidUntil)
+	}
 }
 
 // TestIntegration_RequestQuote_USDT_MXN verifies that a USDT/MXN quote can be requested from XFX.

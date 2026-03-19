@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -44,6 +45,9 @@ func NewClient(logger *zap.Logger, rateMgr *rate.Manager, tokens *TokenManager) 
 		if msg == "" {
 			msg = string(body)
 		}
+		if len(errResp.Error.ValidationErrors) > 0 {
+			msg += ": " + strings.Join(errResp.Error.ValidationErrors, "; ")
+		}
 		return fmt.Errorf("xfx returned %d: %s", status, msg)
 	})
 	return &Client{
@@ -65,6 +69,9 @@ func (c *Client) RequestQuote(ctx context.Context, cfg *XFXClientConfig, req *XF
 	if err != nil {
 		return nil, err
 	}
+	if err := xfxAPIError(resp.Success, resp.Message); err != nil {
+		return nil, err
+	}
 	return &resp, nil
 }
 
@@ -78,6 +85,9 @@ func (c *Client) GetQuote(ctx context.Context, cfg *XFXClientConfig, quoteID str
 	metrics.IncXFXRequest(endpoint, method, statusLabel(err))
 	metrics.ObserveDuration(metrics.XFXRequestDuration, start, endpoint, method)
 	if err != nil {
+		return nil, err
+	}
+	if err := xfxAPIError(resp.Success, resp.Message); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -95,6 +105,9 @@ func (c *Client) ExecuteQuote(ctx context.Context, cfg *XFXClientConfig, quoteID
 	if err != nil {
 		return nil, err
 	}
+	if err := xfxAPIError(resp.Success, resp.Message); err != nil {
+		return nil, err
+	}
 	return &resp, nil
 }
 
@@ -110,7 +123,21 @@ func (c *Client) GetTransaction(ctx context.Context, cfg *XFXClientConfig, txID 
 	if err != nil {
 		return nil, err
 	}
+	if err := xfxAPIError(resp.Success, resp.Message); err != nil {
+		return nil, err
+	}
 	return &resp, nil
+}
+
+// xfxAPIError converts a success=false response into an error.
+func xfxAPIError(success bool, message string) error {
+	if success {
+		return nil
+	}
+	if message == "" {
+		message = "unknown error"
+	}
+	return fmt.Errorf("xfx api error: %s", message)
 }
 
 // statusLabel returns "ok" or "error" for use as a Prometheus label.

@@ -112,6 +112,7 @@ type XFXExecuteResponse struct {
 // XFXTransactionResponse is the response from GET /v1/customer/transactions/{id}.
 type XFXTransactionResponse struct {
 	Success     bool           `json:"success"`
+	Message     string         `json:"message,omitempty"`
 	Transaction XFXTransaction `json:"transaction"`
 }
 
@@ -153,7 +154,8 @@ type XFXErrorResponse struct {
 
 // XFXError holds the structured error detail.
 type XFXError struct {
-	Code    string   `json:"code,omitempty"`
-	Message string   `json:"message,omitempty"`
-	Details []string `json:"details,omitempty"`
+	Code             string   `json:"code,omitempty"`
+	Message          string   `json:"message,omitempty"`
+	Details          []string `json:"details,omitempty"`
+	ValidationErrors []string `json:"validation_errors,omitempty"`
 }
