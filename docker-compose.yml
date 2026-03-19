@@ -138,8 +138,8 @@ services:
 
 networks:
   checker_app-network:
+    name: checker_app-network
     driver: bridge
-    internal: false
 
 volumes:
   natsdata:
