@@ -4,6 +4,7 @@ package xfx
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -11,29 +12,68 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/rate"
+	intsecrets "github.com/Checker-Finance/adapters/internal/secrets"
+	pkgsecrets "github.com/Checker-Finance/adapters/pkg/secrets"
 )
 
-// newIntegrationConfig returns an XFXClientConfig from environment variables.
-// Skips the test if required env vars are not set.
+// newIntegrationConfig resolves XFXClientConfig from AWS Secrets Manager,
+// exactly as the production service does via AWSResolver.
+//
+// Required env vars:
+//   - XFX_TEST_CLIENT_ID — the client ID whose secret to fetch
+//
+// Optional env vars:
+//   - ENV        — environment prefix (default: "dev")
+//   - AWS_REGION — AWS region (default: "us-east-2")
 func newIntegrationConfig(t *testing.T) *XFXClientConfig {
 	t.Helper()
 
-	clientID := os.Getenv("XFX_CLIENT_ID")
-	clientSecret := os.Getenv("XFX_CLIENT_SECRET")
-	baseURL := os.Getenv("XFX_BASE_URL")
-	auth0Endpoint := os.Getenv("XFX_AUTH0_ENDPOINT")
-	auth0Audience := os.Getenv("XFX_AUTH0_AUDIENCE")
-	if clientID == "" || clientSecret == "" || baseURL == "" || auth0Endpoint == "" || auth0Audience == "" {
-		t.Skip("XFX_CLIENT_ID, XFX_CLIENT_SECRET, XFX_BASE_URL, XFX_AUTH0_ENDPOINT, and XFX_AUTH0_AUDIENCE must be set for integration tests")
+	clientID := os.Getenv("XFX_TEST_CLIENT_ID")
+	if clientID == "" {
+		t.Skip("XFX_TEST_CLIENT_ID must be set for integration tests")
 	}
 
-	return &XFXClientConfig{
-		ClientID:      clientID,
-		ClientSecret:  clientSecret,
-		BaseURL:       baseURL,
-		Auth0Endpoint: auth0Endpoint,
-		Auth0Audience: auth0Audience,
+	env := os.Getenv("ENV")
+	if env == "" {
+		env = "dev"
 	}
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		region = "us-east-2"
+	}
+
+	logger, _ := zap.NewDevelopment()
+
+	provider, err := pkgsecrets.NewAWSProvider(region)
+	if err != nil {
+		t.Fatalf("failed to create AWS provider: %v", err)
+	}
+
+	cache := pkgsecrets.NewCache[XFXClientConfig](24 * time.Hour)
+	resolver := intsecrets.NewAWSResolver[XFXClientConfig](logger, env, "xfx", provider, cache)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cfg, err := resolver.Resolve(ctx, clientID, func(m map[string]string) (XFXClientConfig, error) {
+		c := XFXClientConfig{
+			ClientID:      m["client_id"],
+			ClientSecret:  m["client_secret"],
+			BaseURL:       m["base_url"],
+			Auth0Endpoint: m["auth0_endpoint"],
+			Auth0Audience: m["auth0_audience"],
+		}
+		if c.ClientID == "" || c.ClientSecret == "" || c.BaseURL == "" || c.Auth0Endpoint == "" || c.Auth0Audience == "" {
+			return XFXClientConfig{}, fmt.Errorf("secret missing required fields (got: client_id=%q base_url=%q auth0_endpoint=%q)", c.ClientID, c.BaseURL, c.Auth0Endpoint)
+		}
+		return c, nil
+	})
+	if err != nil {
+		t.Fatalf("failed to resolve XFX config from AWS SM (%s/%s/xfx): %v", env, clientID, err)
+	}
+
+	t.Logf("Resolved config from AWS SM: env=%s clientID=%s baseURL=%s", env, cfg.ClientID, cfg.BaseURL)
+	return &cfg
 }
 
 func newIntegrationClient(t *testing.T) (*Client, *XFXClientConfig) {
@@ -74,6 +114,36 @@ func TestIntegration_RequestQuote(t *testing.T) {
 
 	resp, err := client.RequestQuote(ctx, cfg, &XFXQuoteRequest{
 		Symbol:   "USD/MXN",
+		Side:     "BUY",
+		Quantity: 100000,
+	})
+	if err != nil {
+		t.Fatalf("RequestQuote failed: %v", err)
+	}
+	if !resp.Success {
+		t.Fatalf("RequestQuote returned success=false: %s", resp.Message)
+	}
+	if resp.Quote.ID == "" {
+		t.Fatal("expected non-empty quote ID")
+	}
+	if resp.Quote.Price <= 0 {
+		t.Errorf("expected positive price, got %f", resp.Quote.Price)
+	}
+
+	t.Logf("Quote obtained: id=%s symbol=%s side=%s quantity=%f price=%f validUntil=%s",
+		resp.Quote.ID, resp.Quote.Symbol, resp.Quote.Side,
+		resp.Quote.Quantity, resp.Quote.Price, resp.Quote.ValidUntil)
+}
+
+// TestIntegration_RequestQuote_USDT_MXN verifies that a USDT/MXN quote can be requested from XFX.
+func TestIntegration_RequestQuote_USDT_MXN(t *testing.T) {
+	client, cfg := newIntegrationClient(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	resp, err := client.RequestQuote(ctx, cfg, &XFXQuoteRequest{
+		Symbol:   "USDT/MXN",
 		Side:     "BUY",
 		Quantity: 100000,
 	})
