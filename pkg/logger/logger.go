@@ -19,6 +19,7 @@ func Init(service, env, level string) {
 	} else {
 		cfg = zap.NewProductionConfig()
 	}
+	cfg.EncoderConfig.EncodeTime = zapcore.RFC3339NanoTimeEncoder
 
 	// Level override
 	if lvl, err := zapcore.ParseLevel(level); err == nil {
