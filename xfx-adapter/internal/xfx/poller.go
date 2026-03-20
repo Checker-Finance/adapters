@@ -2,11 +2,10 @@ package xfx
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
@@ -18,7 +17,6 @@ import (
 // Poller continuously checks XFX transaction status for active trades.
 // XFX does not support webhooks so polling is the only mechanism for status updates.
 type Poller struct {
-	logger       *zap.Logger
 	cfg          config.Config
 	service      *Service
 	publisher    *publisher.Publisher
@@ -32,7 +30,6 @@ type Poller struct {
 
 // NewPoller constructs a new XFX poller.
 func NewPoller(
-	logger *zap.Logger,
 	cfg config.Config,
 	service *Service,
 	pub *publisher.Publisher,
@@ -41,7 +38,6 @@ func NewPoller(
 	tradeSync *legacy.TradeSyncWriter,
 ) *Poller {
 	return &Poller{
-		logger:       logger,
 		cfg:          cfg,
 		service:      service,
 		publisher:    pub,
@@ -67,9 +63,9 @@ func (p *Poller) PollTradeStatus(
 ) {
 	// Prevent duplicate polling for the same transaction
 	if _, exists := p.activeTrades.Load(txID); exists {
-		p.logger.Debug("xfx.trade_poll_already_active",
-			zap.String("tx_id", txID),
-			zap.String("client", clientID),
+		slog.Debug("xfx.trade_poll_already_active",
+			"tx_id", txID,
+			"client", clientID,
 		)
 		return
 	}
@@ -91,25 +87,25 @@ func (p *Poller) PollTradeStatus(
 		for {
 			select {
 			case <-ctx.Done():
-				p.logger.Info("xfx.trade_poll_stopped",
-					zap.String("tx_id", txID),
-					zap.String("client", clientID),
-					zap.String("last_status", lastStatus))
+				slog.Info("xfx.trade_poll_stopped",
+					"tx_id", txID,
+					"client", clientID,
+					"last_status", lastStatus)
 				return
 
 			case <-p.stopCh:
-				p.logger.Info("xfx.trade_poll_stopped",
-					zap.String("tx_id", txID),
-					zap.String("reason", "poller_shutdown"))
+				slog.Info("xfx.trade_poll_stopped",
+					"tx_id", txID,
+					"reason", "poller_shutdown")
 				return
 
 			case <-ticker.C:
 				tx, err := p.service.FetchTransactionStatus(ctx, clientID, txID)
 				if err != nil {
-					p.logger.Warn("xfx.trade_poll_error",
-						zap.String("tx_id", txID),
-						zap.String("client", clientID),
-						zap.Error(err))
+					slog.Warn("xfx.trade_poll_error",
+						"tx_id", txID,
+						"client", clientID,
+						"error", err)
 					continue
 				}
 
@@ -132,17 +128,17 @@ func (p *Poller) PollTradeStatus(
 						subject := "evt.trade.status_changed.v1.XFX"
 						if err := p.publisher.Publish(ctx, subject, event); err != nil {
 							metrics.IncNATSPublishError(subject)
-							p.logger.Debug("nats.publish_failed",
-								zap.String("subject", subject),
-								zap.Error(err))
+							slog.Debug("nats.publish_failed",
+								"subject", subject,
+								"error", err)
 						}
 					}
 
-					p.logger.Info("xfx.trade_status_changed",
-						zap.String("tx_id", txID),
-						zap.String("client", clientID),
-						zap.String("raw_status", rawStatus),
-						zap.String("normalized_status", status))
+					slog.Info("xfx.trade_status_changed",
+						"tx_id", txID,
+						"client", clientID,
+						"raw_status", rawStatus,
+						"normalized_status", status)
 				}
 
 				if IsTerminalStatus(rawStatus) {
@@ -168,16 +164,16 @@ func (p *Poller) handleTerminalStatus(
 		trade := p.service.BuildTradeConfirmationFromTx(clientID, tx)
 		if trade != nil {
 			if err := p.tradeSync.SyncTradeUpsert(ctx, trade); err != nil {
-				p.logger.Warn("legacy.trade_sync_failed",
-					zap.String("tx_id", txID),
-					zap.String("client", clientID),
-					zap.Error(err))
+				slog.Warn("legacy.trade_sync_failed",
+					"tx_id", txID,
+					"client", clientID,
+					"error", err)
 			} else {
-				p.logger.Info("legacy.trade_sync_upsert",
-					zap.String("tx_id", txID),
-					zap.String("client", clientID),
-					zap.String("status", trade.Status),
-					zap.String("venue", trade.Venue))
+				slog.Info("legacy.trade_sync_upsert",
+					"tx_id", txID,
+					"client", clientID,
+					"status", trade.Status,
+					"venue", trade.Venue)
 			}
 		}
 	}
@@ -194,14 +190,14 @@ func (p *Poller) handleTerminalStatus(
 			"timestamp": time.Now().UTC(),
 		}); err != nil {
 			metrics.IncNATSPublishError(finalSubject)
-			p.logger.Debug("nats.publish_failed",
-				zap.String("subject", finalSubject),
-				zap.Error(err))
+			slog.Debug("nats.publish_failed",
+				"subject", finalSubject,
+				"error", err)
 		}
 	}
 
-	p.logger.Info("xfx.trade_poll_complete",
-		zap.String("tx_id", txID),
-		zap.String("client", clientID),
-		zap.String("final_status", status))
+	slog.Info("xfx.trade_poll_complete",
+		"tx_id", txID,
+		"client", clientID,
+		"final_status", status)
 }

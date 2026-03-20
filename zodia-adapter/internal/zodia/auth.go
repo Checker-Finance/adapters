@@ -6,10 +6,9 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 const (
@@ -67,18 +66,16 @@ type wsTokenEntry struct {
 // Tokens are obtained by calling POST /ws/auth (HMAC-signed REST endpoint).
 // Each client's token is keyed by their api_key.
 type WSTokenManager struct {
-	logger *zap.Logger
-	rest   *RESTClient
-	mu     sync.Mutex
-	cache  map[string]wsTokenEntry // apiKey → tokenEntry
+	rest  *RESTClient
+	mu    sync.Mutex
+	cache map[string]wsTokenEntry // apiKey → tokenEntry
 }
 
 // NewWSTokenManager creates a new WSTokenManager.
-func NewWSTokenManager(logger *zap.Logger, rest *RESTClient) *WSTokenManager {
+func NewWSTokenManager(rest *RESTClient) *WSTokenManager {
 	return &WSTokenManager{
-		logger: logger,
-		rest:   rest,
-		cache:  make(map[string]wsTokenEntry),
+		rest:  rest,
+		cache: make(map[string]wsTokenEntry),
 	}
 }
 
@@ -109,7 +106,7 @@ func (m *WSTokenManager) GetToken(ctx context.Context, cfg *ZodiaClientConfig) (
 	if len(masked) > 8 {
 		masked = masked[:8] + "..."
 	}
-	m.logger.Info("zodia.ws_token_refreshed", zap.String("api_key_prefix", masked))
+	slog.Info("zodia.ws_token_refreshed", "api_key_prefix", masked)
 
 	return token, nil
 }
@@ -120,5 +117,5 @@ func (m *WSTokenManager) InvalidateToken(apiKey string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.cache, apiKey)
-	m.logger.Debug("zodia.ws_token_invalidated")
+	slog.Debug("zodia.ws_token_invalidated")
 }

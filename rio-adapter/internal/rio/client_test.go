@@ -9,7 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/httpclient"
 )
@@ -25,8 +24,7 @@ func testClientConfig(serverURL string) *RioClientConfig {
 
 func newTestClient(t *testing.T, handler http.HandlerFunc) (*Client, *httptest.Server, *RioClientConfig) {
 	server := httptest.NewServer(handler)
-	logger := zap.NewNop()
-	client := NewClient(logger, nil)
+	client := NewClient(nil)
 	return client, server, testClientConfig(server.URL)
 }
 

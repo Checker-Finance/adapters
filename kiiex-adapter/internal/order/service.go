@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
-
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/kiiex-adapter/internal/alphapoint"
 	"github.com/Checker-Finance/adapters/kiiex-adapter/internal/instruments"
@@ -35,7 +34,6 @@ type Service struct {
 	instrumentMaster *instruments.Master
 	eventBus         *eventbus.EventBus
 	wsURL            string
-	logger           *zap.Logger
 }
 
 // NewService creates a new order service
@@ -44,7 +42,6 @@ func NewService(
 	instrumentMaster *instruments.Master,
 	eventBus *eventbus.EventBus,
 	wsURL string,
-	logger *zap.Logger,
 ) *Service {
 	return &Service{
 		sessions:         make(map[string]sessionEntry),
@@ -52,7 +49,6 @@ func NewService(
 		instrumentMaster: instrumentMaster,
 		eventBus:         eventBus,
 		wsURL:            wsURL,
-		logger:           logger,
 	}
 }
 
@@ -77,12 +73,12 @@ func (s *Service) getOrCreateSession(ctx context.Context, clientID string) (sess
 		return sessionEntry{}, fmt.Errorf("resolve credentials for client %q: %w", clientID, err)
 	}
 
-	client := alphapoint.NewClient(s.wsURL, s.logger)
+	client := alphapoint.NewClient(s.wsURL)
 	if err := client.Connect(ctx); err != nil {
 		return sessionEntry{}, fmt.Errorf("connect to AlphaPoint for client %q: %w", clientID, err)
 	}
 
-	sess := alphapoint.NewSession(client, s.logger)
+	sess := alphapoint.NewSession(client)
 	sess.SetAuth(&alphapoint.AuthenticateUserRequest{
 		APIKey:    auth.APIKey,
 		Signature: auth.Signature,
@@ -95,13 +91,13 @@ func (s *Service) getOrCreateSession(ctx context.Context, clientID string) (sess
 
 	entry = sessionEntry{session: sess, auth: auth}
 	s.sessions[clientID] = entry
-	s.logger.Info("AlphaPoint session created", zap.String("clientID", clientID))
+	slog.Info("AlphaPoint session created", "clientID", clientID)
 	return entry, nil
 }
 
 // ExecuteOrder submits an order to AlphaPoint for the client identified in the command.
 func (s *Service) ExecuteOrder(ctx context.Context, cmd *SubmitOrderCommand) error {
-	s.logger.Info("SubmitOrderCommand received", zap.Any("command", cmd))
+	slog.Info("SubmitOrderCommand received", "command", cmd)
 
 	entry, err := s.getOrCreateSession(ctx, cmd.ClientID)
 	if err != nil {
@@ -133,12 +129,12 @@ func (s *Service) ExecuteOrder(ctx context.Context, cmd *SubmitOrderCommand) err
 	}
 
 	if err := entry.session.Login(ctx); err != nil {
-		s.logger.Error("Failed to login", zap.Error(err))
+		slog.Error("Failed to login", "error", err)
 		return err
 	}
 
 	if err := entry.session.ExecuteOrder(ctx, orderReq); err != nil {
-		s.logger.Error("Failed to execute order", zap.Error(err))
+		slog.Error("Failed to execute order", "error", err)
 		return err
 	}
 
@@ -152,7 +148,7 @@ func (s *Service) ExecuteOrder(ctx context.Context, cmd *SubmitOrderCommand) err
 
 // CancelOrder cancels an order for a specific client.
 func (s *Service) CancelOrder(ctx context.Context, clientID, orderID string) error {
-	s.logger.Info("CancelOrder", zap.String("clientID", clientID), zap.String("orderId", orderID))
+	slog.Info("CancelOrder", "clientID", clientID, "orderId", orderID)
 
 	orderIDInt, err := strconv.Atoi(orderID)
 	if err != nil {
@@ -171,12 +167,12 @@ func (s *Service) CancelOrder(ctx context.Context, clientID, orderID string) err
 	}
 
 	if err := entry.session.Login(ctx); err != nil {
-		s.logger.Error("Failed to login", zap.Error(err))
+		slog.Error("Failed to login", "error", err)
 		return err
 	}
 
 	if err := entry.session.CancelOrder(ctx, cancel); err != nil {
-		s.logger.Error("Failed to cancel order", zap.Error(err))
+		slog.Error("Failed to cancel order", "error", err)
 		return err
 	}
 
@@ -189,7 +185,7 @@ func (s *Service) CancelOrder(ctx context.Context, clientID, orderID string) err
 
 // GetTradeStatus requests the status of a trade via the client's own session.
 func (s *Service) GetTradeStatus(ctx context.Context, tradeInfo TradeInfo) error {
-	s.logger.Info("GetTradeStatus", zap.Any("tradeInfo", tradeInfo))
+	slog.Info("GetTradeStatus", "tradeInfo", tradeInfo)
 
 	entry, err := s.getOrCreateSession(ctx, tradeInfo.ClientID)
 	if err != nil {
@@ -213,7 +209,7 @@ func (s *Service) Close() error {
 	var errs []error
 	for clientID, entry := range s.sessions {
 		if err := entry.session.Close(); err != nil {
-			s.logger.Error("failed to close session", zap.String("clientID", clientID), zap.Error(err))
+			slog.Error("failed to close session", "clientID", clientID, "error", err)
 			errs = append(errs, fmt.Errorf("close session %q: %w", clientID, err))
 		}
 	}
@@ -221,16 +217,16 @@ func (s *Service) Close() error {
 }
 
 func (s *Service) handleSendOrderResponse(response *alphapoint.Response) {
-	s.logger.Info("Order submitted response", zap.String("payload", response.O))
+	slog.Info("Order submitted response", "payload", response.O)
 
 	var sendOrderResp alphapoint.SendOrderResponse
 	if err := response.ParsePayload(&sendOrderResp); err != nil {
-		s.logger.Error("Failed to parse SendOrderResponse", zap.Error(err))
+		slog.Error("Failed to parse SendOrderResponse", "error", err)
 		return
 	}
 
 	if strings.ToLower(sendOrderResp.Status) == "rejected" {
-		s.logger.Warn("Order rejected", zap.String("error", sendOrderResp.ErrorMessage))
+		slog.Warn("Order rejected", "error", sendOrderResp.ErrorMessage)
 		s.eventBus.Publish(&AttemptedCancelEvent{
 			OrderID: int(sendOrderResp.OrderID),
 		})
@@ -238,11 +234,11 @@ func (s *Service) handleSendOrderResponse(response *alphapoint.Response) {
 }
 
 func (s *Service) handleCancelOrderResponse(response *alphapoint.Response) {
-	s.logger.Info("Cancel submitted response", zap.String("payload", response.O))
+	slog.Info("Cancel submitted response", "payload", response.O)
 
 	var cancelResp alphapoint.CancelOrderResponse
 	if err := response.ParsePayload(&cancelResp); err != nil {
-		s.logger.Error("Failed to parse CancelOrderResponse", zap.Error(err))
+		slog.Error("Failed to parse CancelOrderResponse", "error", err)
 		return
 	}
 
@@ -252,24 +248,24 @@ func (s *Service) handleCancelOrderResponse(response *alphapoint.Response) {
 }
 
 func (s *Service) handleGetOrderStatusResponse(response *alphapoint.Response) {
-	s.logger.Info("Order status response", zap.String("payload", response.O))
+	slog.Info("Order status response", "payload", response.O)
 
 	var statusResp alphapoint.GetOrderStatusResponse
 	if err := response.ParsePayload(&statusResp); err != nil {
-		s.logger.Error("Failed to parse GetOrderStatusResponse", zap.Error(err))
+		slog.Error("Failed to parse GetOrderStatusResponse", "error", err)
 		return
 	}
 
 	for _, order := range statusResp.Orders {
 		if order.OrderID == 0 {
-			s.logger.Error("Received order with null orderId", zap.Any("order", order))
+			slog.Error("Received order with null orderId", "order", order)
 			continue
 		}
 
 		orderState := strings.ToLower(order.OrderState)
 
 		if orderState == "canceled" || orderState == "rejected" {
-			s.logger.Warn("Order canceled or rejected", zap.Int("orderId", order.OrderID))
+			slog.Warn("Order canceled or rejected", "orderId", order.OrderID)
 			s.eventBus.Publish(&AttemptedCancelEvent{
 				OrderID: order.OrderID,
 			})

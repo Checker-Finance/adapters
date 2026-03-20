@@ -2,8 +2,7 @@ package nats
 
 import (
 	"context"
-
-	"go.uber.org/zap"
+	"log/slog"
 
 	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/kiiex-adapter/internal/order"
@@ -19,15 +18,13 @@ const (
 type NATSPublisher struct {
 	pub      *publisher.Publisher
 	eventBus *eventbus.EventBus
-	logger   *zap.Logger
 }
 
 // NewNATSPublisher creates a NATSPublisher that listens to eventBus and forwards events to NATS.
-func NewNATSPublisher(pub *publisher.Publisher, eventBus *eventbus.EventBus, logger *zap.Logger) *NATSPublisher {
+func NewNATSPublisher(pub *publisher.Publisher, eventBus *eventbus.EventBus) *NATSPublisher {
 	p := &NATSPublisher{
 		pub:      pub,
 		eventBus: eventBus,
-		logger:   logger,
 	}
 	p.subscribeToEvents()
 	return p
@@ -61,28 +58,28 @@ func (p *NATSPublisher) subscribeToEvents() {
 
 func (p *NATSPublisher) publishFillArrived(event *order.FillArrivedEvent) {
 	if event == nil || event.OrderID == "" {
-		p.logger.Error("kiiex.publisher.fill_invalid", zap.Any("event", event))
+		slog.Error("kiiex.publisher.fill_invalid", "event", event)
 		return
 	}
-	p.logger.Info("kiiex.publisher.fill",
-		zap.String("orderId", event.OrderID),
-		zap.String("instrumentPair", event.InstrumentPair),
-		zap.String("status", event.Status),
+	slog.Info("kiiex.publisher.fill",
+		"orderId", event.OrderID,
+		"instrumentPair", event.InstrumentPair,
+		"status", event.Status,
 	)
 	if err := p.pub.Publish(context.Background(), subjectKiiexFilled, event); err != nil {
-		p.logger.Error("kiiex.publisher.fill_failed", zap.Error(err))
+		slog.Error("kiiex.publisher.fill_failed", "error", err)
 	}
 }
 
 func (p *NATSPublisher) publishOrderCanceled(event *order.OrderCanceledEvent) {
 	if event == nil || event.OrderID == "" {
-		p.logger.Error("kiiex.publisher.cancel_invalid", zap.Any("event", event))
+		slog.Error("kiiex.publisher.cancel_invalid", "event", event)
 		return
 	}
-	p.logger.Info("kiiex.publisher.cancel",
-		zap.String("orderId", event.OrderID),
+	slog.Info("kiiex.publisher.cancel",
+		"orderId", event.OrderID,
 	)
 	if err := p.pub.Publish(context.Background(), subjectKiiexCancelled, event); err != nil {
-		p.logger.Error("kiiex.publisher.cancel_failed", zap.Error(err))
+		slog.Error("kiiex.publisher.cancel_failed", "error", err)
 	}
 }

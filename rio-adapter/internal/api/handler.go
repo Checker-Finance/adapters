@@ -2,9 +2,9 @@ package api
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/pkg/model"
 )
@@ -22,16 +22,14 @@ type ClientValidator interface {
 
 // RioHandler handles HTTP API requests for Rio operations.
 type RioHandler struct {
-	logger    *zap.Logger
 	service   RFQService
 	validator ClientValidator
 }
 
 // NewRioHandler creates a new RioHandler.
 // validator is optional — if nil, client validation is skipped.
-func NewRioHandler(logger *zap.Logger, service RFQService, validator ClientValidator) *RioHandler {
+func NewRioHandler(service RFQService, validator ClientValidator) *RioHandler {
 	return &RioHandler{
-		logger:    logger,
 		service:   service,
 		validator: validator,
 	}
@@ -55,9 +53,9 @@ func (h *RioHandler) CreateRFQHandler(c *fiber.Ctx) error {
 
 	quote, err := h.service.CreateRFQ(c.Context(), r)
 	if err != nil {
-		h.logger.Error("rio.create_rfq.failed",
-			zap.String("client", req.ClientID),
-			zap.Error(err))
+		slog.Error("rio.create_rfq.failed",
+			"client", req.ClientID,
+			"error", err)
 		return c.Status(fiber.StatusBadRequest).JSON(RFQResponse{
 			QuoteID:  req.ID,
 			ErrorMsg: err.Error(),
@@ -91,16 +89,16 @@ func (h *RioHandler) ExecuteRFQHandler(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "quoteId is required"})
 	}
 
-	h.logger.Info("rio.execute_rfq",
-		zap.String("client", req.ClientID),
-		zap.String("quote_id", quoteID))
+	slog.Info("rio.execute_rfq",
+		"client", req.ClientID,
+		"quote_id", quoteID)
 
 	trade, err := h.service.ExecuteRFQ(c.Context(), req.ClientID, quoteID)
 	if err != nil {
-		h.logger.Error("rio.execute_rfq.failed",
-			zap.String("client", req.ClientID),
-			zap.String("quote_id", quoteID),
-			zap.Error(err))
+		slog.Error("rio.execute_rfq.failed",
+			"client", req.ClientID,
+			"quote_id", quoteID,
+			"error", err)
 		return c.Status(fiber.StatusBadRequest).JSON(RFQExecutionResponse{
 			OrderID:  req.OrderID,
 			ErrorMsg: err.Error(),

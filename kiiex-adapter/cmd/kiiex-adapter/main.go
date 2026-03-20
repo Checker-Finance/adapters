@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/nats-io/nats.go"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/publisher"
 	kiiexapi "github.com/Checker-Finance/adapters/kiiex-adapter/internal/api"
@@ -37,20 +37,20 @@ func main() {
 
 	pkglogger.Init("kiiex-adapter", cfg.Profile, cfg.LogLevel)
 	defer pkglogger.Sync()
-	logg := pkglogger.L()
 
-	logg.Info("Starting kiiex-adapter", zap.String("version", Version))
-	logg.Info("Configuration loaded",
-		zap.Int("serverPort", cfg.ServerPort),
-		zap.String("provider", cfg.Provider),
-		zap.String("websocketURL", cfg.WebSocketURL),
-		zap.String("env", cfg.Env),
+	slog.Info("Starting kiiex-adapter", "version", Version)
+	slog.Info("Configuration loaded",
+		"serverPort", cfg.ServerPort,
+		"provider", cfg.Provider,
+		"websocketURL", cfg.WebSocketURL,
+		"env", cfg.Env,
 	)
 
 	// --- AWS Secrets Manager provider ---
 	awsProvider, err := pkgsecrets.NewAWSProvider(cfg.AWSRegion)
 	if err != nil {
-		logg.Fatal("Failed to create AWS Secrets Manager provider", zap.Error(err))
+		slog.Error("Failed to create AWS Secrets Manager provider", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Per-client config resolver (secrets cached in-memory) ---
@@ -59,91 +59,95 @@ func main() {
 	go cache.StartCleaner(10*time.Minute, stopCleaner)
 	defer close(stopCleaner)
 
-	resolver := kiisecrets.NewAWSResolver(logg, cfg.Env, awsProvider, cache)
+	resolver := kiisecrets.NewAWSResolver(cfg.Env, awsProvider, cache)
 
 	// --- Discover configured clients ---
 	clients, err := resolver.DiscoverClients(ctx)
 	if err != nil {
-		logg.Warn("Failed to discover clients from AWS Secrets Manager", zap.Error(err))
+		slog.Warn("Failed to discover clients from AWS Secrets Manager", "error", err)
 	} else {
-		logg.Info("Discovered Kiiex clients", zap.Int("count", len(clients)), zap.Strings("clients", clients))
+		slog.Info("Discovered Kiiex clients", "count", len(clients), "clients", clients)
 	}
 
 	// --- Create event bus ---
 	eventBus := eventbus.New()
 
 	// --- Create instrument master ---
-	instrumentMaster := instruments.NewMaster(logg)
+	instrumentMaster := instruments.NewMaster()
 	if err := instrumentMaster.LoadFromFile(cfg.SymbolMappingPath); err != nil {
-		logg.Fatal("Failed to load symbol mappings", zap.Error(err))
+		slog.Error("Failed to load symbol mappings", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Create order service (sessions are created on demand, one per client) ---
-	orderService := order.NewService(resolver, instrumentMaster, eventBus, cfg.WebSocketURL, logg)
+	orderService := order.NewService(resolver, instrumentMaster, eventBus, cfg.WebSocketURL)
 
 	// --- Create trade status service ---
-	tradeStatusService := tracking.NewTradeStatusService(orderService, eventBus, logg)
+	tradeStatusService := tracking.NewTradeStatusService(orderService, eventBus)
 	go tradeStatusService.Start(ctx)
 
 	// --- Connect to NATS ---
 	nc, err := nats.Connect(cfg.NATSURL)
 	if err != nil {
-		logg.Fatal("Failed to connect to NATS", zap.Error(err))
+		slog.Error("Failed to connect to NATS", "error", err)
+		os.Exit(1)
 	}
 	defer nc.Close()
 
 	// --- Publisher ---
 	pub, err := publisher.New(nc, "evt.kiiex", "KIIEX_EVENTS")
 	if err != nil {
-		logg.Fatal("Failed to init NATS publisher", zap.Error(err))
+		slog.Error("Failed to init NATS publisher", "error", err)
+		os.Exit(1)
 	}
 
 	// --- NATS publisher (subscribes to eventbus, forwards to NATS) ---
-	_ = kiinats.NewNATSPublisher(pub, eventBus, logg)
+	_ = kiinats.NewNATSPublisher(pub, eventBus)
 
 	// --- NATS command consumer ---
-	consumer := kiinats.NewCommandConsumer(nc, orderService, logg)
+	consumer := kiinats.NewCommandConsumer(nc, orderService)
 	if err := consumer.Subscribe(ctx, cfg.InboundSubject, cfg.CancelSubject); err != nil {
-		logg.Fatal("Failed to subscribe NATS command consumer", zap.Error(err))
+		slog.Error("Failed to subscribe NATS command consumer", "error", err)
+		os.Exit(1)
 	}
 	defer consumer.Drain()
 
 	// --- Fiber HTTP server ---
 	app := fiber.New(fiber.Config{DisableStartupMessage: true})
-	handler := kiiexapi.NewKiiexHandler(logg, orderService)
+	handler := kiiexapi.NewKiiexHandler(orderService)
 	kiiexapi.RegisterRoutes(app, handler, nc)
 
 	go func() {
 		if err := app.Listen(fmt.Sprintf(":%d", cfg.ServerPort)); err != nil {
-			logg.Error("fiber server error", zap.Error(err))
+			slog.Error("fiber server error", "error", err)
 		}
 	}()
 
-	logg.Info("kiiex-adapter started successfully",
-		zap.String("natsURL", cfg.NATSURL),
-		zap.Int("serverPort", cfg.ServerPort),
+	slog.Info("kiiex-adapter started successfully",
+		"natsURL", cfg.NATSURL,
+		"serverPort", cfg.ServerPort,
 	)
 
 	<-ctx.Done()
 
-	logg.Info("Shutdown signal received, starting graceful shutdown...")
+	slog.Info("Shutdown signal received, starting graceful shutdown...")
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
 	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
-		logg.Error("fiber shutdown error", zap.Error(err))
+		slog.Error("fiber shutdown error", "error", err)
 	}
 
 	tradeStatusService.Stop()
 	if err := orderService.Close(); err != nil {
-		logg.Error("failed to close order service sessions", zap.Error(err))
+		slog.Error("failed to close order service sessions", "error", err)
 	}
 
 	select {
 	case <-shutdownCtx.Done():
-		logg.Warn("Shutdown timeout exceeded")
+		slog.Warn("Shutdown timeout exceeded")
 	default:
-		logg.Info("Graceful shutdown completed")
+		slog.Info("Graceful shutdown completed")
 	}
 }

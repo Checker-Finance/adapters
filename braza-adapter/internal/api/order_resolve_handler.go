@@ -2,17 +2,16 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/braza"
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
 )
 
 type OrderResolveHandler struct {
-	Logger    *zap.Logger
 	Service   *braza.Service
 	Store     store.Store
 	TradeSync *legacy.TradeSyncWriter
@@ -57,7 +56,7 @@ func (h *OrderResolveHandler) ResolveOrder(c *fiber.Ctx) error {
 	// 4. Fetch Braza status
 	orderStatus, err := h.Service.FetchTradeStatus(ctx, qrec.ClientID, qrec.ProviderOrderID, creds)
 	if err != nil {
-		h.Logger.Error("failed to fetch order status", zap.Error(err))
+		slog.Error("failed to fetch order status", "error", err)
 		return c.Status(500).JSON(fiber.Map{"error": "failed to fetch status from Braza"})
 	}
 

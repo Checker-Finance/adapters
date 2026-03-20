@@ -191,17 +191,17 @@ func (m *Mapper) WebhookToTransaction(event *ZodiaWebhookEvent) *ZodiaTransactio
 		return nil
 	}
 	return &ZodiaTransaction{
-		UUID:        event.UUID,
-		Type:        event.Type,
-		State:       event.State,
-		TradeID:     event.TradeID,
-		Instrument:  event.Instrument,
-		Side:        event.Side,
-		Quantity:    event.Quantity,
-		Price:       event.Price,
-		DealtAmount: event.DealtAmount,
+		UUID:         event.UUID,
+		Type:         event.Type,
+		State:        event.State,
+		TradeID:      event.TradeID,
+		Instrument:   event.Instrument,
+		Side:         event.Side,
+		Quantity:     event.Quantity,
+		Price:        event.Price,
+		DealtAmount:  event.DealtAmount,
 		ContraAmount: event.ContraAmount,
-		CreatedAt:   event.CreatedAt,
-		UpdatedAt:   event.UpdatedAt,
+		CreatedAt:    event.CreatedAt,
+		UpdatedAt:    event.UpdatedAt,
 	}
 }

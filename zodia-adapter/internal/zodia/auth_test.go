@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // ─── HMACSigner ───────────────────────────────────────────────────────────────
@@ -80,7 +79,6 @@ func testZodiaCfg(apiKey string) *ZodiaClientConfig {
 
 func TestWSTokenManager_GetToken_CacheHit(t *testing.T) {
 	mgr := &WSTokenManager{
-		logger: zap.NewNop(),
 		cache:  make(map[string]wsTokenEntry),
 	}
 
@@ -101,7 +99,6 @@ func TestWSTokenManager_GetToken_CacheHit(t *testing.T) {
 
 func TestWSTokenManager_GetToken_NearExpiry(t *testing.T) {
 	mgr := &WSTokenManager{
-		logger: zap.NewNop(),
 		cache:  make(map[string]wsTokenEntry),
 	}
 
@@ -119,7 +116,6 @@ func TestWSTokenManager_GetToken_NearExpiry(t *testing.T) {
 
 func TestWSTokenManager_InvalidateToken(t *testing.T) {
 	mgr := &WSTokenManager{
-		logger: zap.NewNop(),
 		cache: map[string]wsTokenEntry{
 			"api-key-3": {token: "valid-token", expiresAt: time.Now().Add(24 * time.Hour)},
 		},
@@ -132,7 +128,6 @@ func TestWSTokenManager_InvalidateToken(t *testing.T) {
 
 func TestWSTokenManager_InvalidateToken_NonExistent(t *testing.T) {
 	mgr := &WSTokenManager{
-		logger: zap.NewNop(),
 		cache:  make(map[string]wsTokenEntry),
 	}
 	// Should not panic
@@ -161,8 +156,8 @@ func TestWSTokenManager_GetToken_ViaRESTServer(t *testing.T) {
 	defer srv.Close()
 
 	signer := NewHMACSigner()
-	restClient := NewRESTClient(zap.NewNop(), nil, signer)
-	mgr := NewWSTokenManager(zap.NewNop(), restClient)
+	restClient := NewRESTClient(nil, signer)
+	mgr := NewWSTokenManager(restClient)
 
 	cfg := testZodiaCfg("test-key")
 	cfg.BaseURL = srv.URL

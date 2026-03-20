@@ -2,22 +2,20 @@ package capa
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
+	"github.com/Checker-Finance/adapters/capa-adapter/internal/metrics"
+	"github.com/Checker-Finance/adapters/capa-adapter/pkg/config"
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/internal/store"
-	"github.com/Checker-Finance/adapters/capa-adapter/internal/metrics"
-	"github.com/Checker-Finance/adapters/capa-adapter/pkg/config"
 )
 
 // Poller continuously checks Capa transaction status for active trades.
 // Webhooks are the primary mechanism; polling is the fallback for missed events.
 type Poller struct {
-	logger       *zap.Logger
 	cfg          config.Config
 	service      *Service
 	publisher    *publisher.Publisher
@@ -31,7 +29,6 @@ type Poller struct {
 
 // NewPoller constructs a new Capa poller.
 func NewPoller(
-	logger *zap.Logger,
 	cfg config.Config,
 	service *Service,
 	pub *publisher.Publisher,
@@ -40,7 +37,6 @@ func NewPoller(
 	tradeSync *legacy.TradeSyncWriter,
 ) *Poller {
 	return &Poller{
-		logger:       logger,
 		cfg:          cfg,
 		service:      service,
 		publisher:    pub,
@@ -61,7 +57,7 @@ func (p *Poller) Stop() {
 func (p *Poller) CancelPolling(txID string) {
 	if cancelFn, ok := p.activeTrades.Load(txID); ok {
 		cancelFn.(context.CancelFunc)()
-		p.logger.Debug("capa.poller.cancelled_by_webhook", zap.String("tx_id", txID))
+		slog.Debug("capa.poller.cancelled_by_webhook", "tx_id", txID)
 	}
 }
 
@@ -75,9 +71,9 @@ func (p *Poller) PollTradeStatus(
 ) {
 	// Prevent duplicate polling for the same transaction
 	if _, exists := p.activeTrades.Load(txID); exists {
-		p.logger.Debug("capa.trade_poll_already_active",
-			zap.String("tx_id", txID),
-			zap.String("client", clientID),
+		slog.Debug("capa.trade_poll_already_active",
+			"tx_id", txID,
+			"client", clientID,
 		)
 		return
 	}
@@ -99,25 +95,25 @@ func (p *Poller) PollTradeStatus(
 		for {
 			select {
 			case <-ctx.Done():
-				p.logger.Info("capa.trade_poll_stopped",
-					zap.String("tx_id", txID),
-					zap.String("client", clientID),
-					zap.String("last_status", lastStatus))
+				slog.Info("capa.trade_poll_stopped",
+					"tx_id", txID,
+					"client", clientID,
+					"last_status", lastStatus)
 				return
 
 			case <-p.stopCh:
-				p.logger.Info("capa.trade_poll_stopped",
-					zap.String("tx_id", txID),
-					zap.String("reason", "poller_shutdown"))
+				slog.Info("capa.trade_poll_stopped",
+					"tx_id", txID,
+					"reason", "poller_shutdown")
 				return
 
 			case <-ticker.C:
 				tx, err := p.service.FetchTransactionStatus(ctx, clientID, txID)
 				if err != nil {
-					p.logger.Warn("capa.trade_poll_error",
-						zap.String("tx_id", txID),
-						zap.String("client", clientID),
-						zap.Error(err))
+					slog.Warn("capa.trade_poll_error",
+						"tx_id", txID,
+						"client", clientID,
+						"error", err)
 					continue
 				}
 
@@ -140,17 +136,17 @@ func (p *Poller) PollTradeStatus(
 						subject := "evt.trade.status_changed.v1.CAPA"
 						if err := p.publisher.Publish(ctx, subject, event); err != nil {
 							metrics.IncNATSPublishError(subject)
-							p.logger.Debug("nats.publish_failed",
-								zap.String("subject", subject),
-								zap.Error(err))
+							slog.Debug("nats.publish_failed",
+								"subject", subject,
+								"error", err)
 						}
 					}
 
-					p.logger.Info("capa.trade_status_changed",
-						zap.String("tx_id", txID),
-						zap.String("client", clientID),
-						zap.String("raw_status", rawStatus),
-						zap.String("normalized_status", status))
+					slog.Info("capa.trade_status_changed",
+						"tx_id", txID,
+						"client", clientID,
+						"raw_status", rawStatus,
+						"normalized_status", status)
 				}
 
 				if IsTerminalStatus(rawStatus) {
@@ -176,16 +172,16 @@ func (p *Poller) handleTerminalStatus(
 		trade := p.service.BuildTradeConfirmationFromTx(clientID, tx)
 		if trade != nil {
 			if err := p.tradeSync.SyncTradeUpsert(ctx, trade); err != nil {
-				p.logger.Warn("legacy.trade_sync_failed",
-					zap.String("tx_id", txID),
-					zap.String("client", clientID),
-					zap.Error(err))
+				slog.Warn("legacy.trade_sync_failed",
+					"tx_id", txID,
+					"client", clientID,
+					"error", err)
 			} else {
-				p.logger.Info("legacy.trade_sync_upsert",
-					zap.String("tx_id", txID),
-					zap.String("client", clientID),
-					zap.String("status", trade.Status),
-					zap.String("venue", trade.Venue))
+				slog.Info("legacy.trade_sync_upsert",
+					"tx_id", txID,
+					"client", clientID,
+					"status", trade.Status,
+					"venue", trade.Venue)
 			}
 		}
 	}
@@ -202,14 +198,14 @@ func (p *Poller) handleTerminalStatus(
 			"timestamp": time.Now().UTC(),
 		}); err != nil {
 			metrics.IncNATSPublishError(finalSubject)
-			p.logger.Debug("nats.publish_failed",
-				zap.String("subject", finalSubject),
-				zap.Error(err))
+			slog.Debug("nats.publish_failed",
+				"subject", finalSubject,
+				"error", err)
 		}
 	}
 
-	p.logger.Info("capa.trade_poll_complete",
-		zap.String("tx_id", txID),
-		zap.String("client", clientID),
-		zap.String("final_status", status))
+	slog.Info("capa.trade_poll_complete",
+		"tx_id", txID,
+		"client", clientID,
+		"final_status", status)
 }

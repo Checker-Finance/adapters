@@ -3,10 +3,10 @@ package nats
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/b2c2-adapter/internal/b2c2"
 )
@@ -22,13 +22,12 @@ type B2C2Service interface {
 type CommandConsumer struct {
 	nc      *nats.Conn
 	service B2C2Service
-	logger  *zap.Logger
 	subs    []*nats.Subscription
 }
 
 // NewCommandConsumer creates a CommandConsumer. Call Subscribe to begin receiving messages.
-func NewCommandConsumer(nc *nats.Conn, service B2C2Service, logger *zap.Logger) *CommandConsumer {
-	return &CommandConsumer{nc: nc, service: service, logger: logger}
+func NewCommandConsumer(nc *nats.Conn, service B2C2Service) *CommandConsumer {
+	return &CommandConsumer{nc: nc, service: service}
 }
 
 // Subscribe registers NATS subscriptions for the three inbound B2C2 command subjects.
@@ -37,13 +36,13 @@ func (c *CommandConsumer) Subscribe(ctx context.Context, rfqSubject, orderSubjec
 	rfqSub, err := c.nc.Subscribe(rfqSubject, func(msg *nats.Msg) {
 		var cmd b2c2.SubmitRequestForQuoteCommand
 		if err := json.Unmarshal(msg.Data, &cmd); err != nil {
-			c.logger.Error("b2c2.consumer.rfq_unmarshal_failed", zap.Error(err))
+			slog.Error("b2c2.consumer.rfq_unmarshal_failed", "error", err)
 			return
 		}
 		msgCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		if err := c.service.HandleRFQCommand(msgCtx, &cmd); err != nil {
-			c.logger.Error("b2c2.consumer.rfq_handle_failed", zap.Error(err))
+			slog.Error("b2c2.consumer.rfq_handle_failed", "error", err)
 		}
 	})
 	if err != nil {
@@ -54,13 +53,13 @@ func (c *CommandConsumer) Subscribe(ctx context.Context, rfqSubject, orderSubjec
 	orderSub, err := c.nc.Subscribe(orderSubject, func(msg *nats.Msg) {
 		var cmd b2c2.SubmitOrderCommand
 		if err := json.Unmarshal(msg.Data, &cmd); err != nil {
-			c.logger.Error("b2c2.consumer.order_unmarshal_failed", zap.Error(err))
+			slog.Error("b2c2.consumer.order_unmarshal_failed", "error", err)
 			return
 		}
 		msgCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		if err := c.service.HandleOrderCommand(msgCtx, &cmd); err != nil {
-			c.logger.Error("b2c2.consumer.order_handle_failed", zap.Error(err))
+			slog.Error("b2c2.consumer.order_handle_failed", "error", err)
 		}
 	})
 	if err != nil {
@@ -71,13 +70,13 @@ func (c *CommandConsumer) Subscribe(ctx context.Context, rfqSubject, orderSubjec
 	cancelSub, err := c.nc.Subscribe(cancelSubject, func(msg *nats.Msg) {
 		var cmd b2c2.CancelOrderCommand
 		if err := json.Unmarshal(msg.Data, &cmd); err != nil {
-			c.logger.Error("b2c2.consumer.cancel_unmarshal_failed", zap.Error(err))
+			slog.Error("b2c2.consumer.cancel_unmarshal_failed", "error", err)
 			return
 		}
 		msgCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		if err := c.service.HandleCancelCommand(msgCtx, &cmd); err != nil {
-			c.logger.Error("b2c2.consumer.cancel_handle_failed", zap.Error(err))
+			slog.Error("b2c2.consumer.cancel_handle_failed", "error", err)
 		}
 	})
 	if err != nil {
@@ -85,10 +84,10 @@ func (c *CommandConsumer) Subscribe(ctx context.Context, rfqSubject, orderSubjec
 	}
 	c.subs = append(c.subs, cancelSub)
 
-	c.logger.Info("b2c2.consumer.started",
-		zap.String("rfq_subject", rfqSubject),
-		zap.String("order_subject", orderSubject),
-		zap.String("cancel_subject", cancelSubject),
+	slog.Info("b2c2.consumer.started",
+		"rfq_subject", rfqSubject,
+		"order_subject", orderSubject,
+		"cancel_subject", cancelSubject,
 	)
 	return nil
 }
@@ -97,7 +96,7 @@ func (c *CommandConsumer) Subscribe(ctx context.Context, rfqSubject, orderSubjec
 func (c *CommandConsumer) Drain() {
 	for _, sub := range c.subs {
 		if err := sub.Drain(); err != nil {
-			c.logger.Error("b2c2.consumer.drain_failed", zap.Error(err))
+			slog.Error("b2c2.consumer.drain_failed", "error", err)
 		}
 	}
 }

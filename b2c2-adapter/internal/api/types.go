@@ -41,8 +41,8 @@ type RFQCreateResponse struct {
 type OrderExecuteRequest struct {
 	OrderID       string `json:"orderId"`
 	ClientID      string `json:"clientId"`
-	Pair          string `json:"pair"`         // canonical format, e.g. "usd:btc"
-	Side          string `json:"side"`         // "buy" or "sell"
+	Pair          string `json:"pair"` // canonical format, e.g. "usd:btc"
+	Side          string `json:"side"` // "buy" or "sell"
 	Quantity      string `json:"quantity"`
 	Price         string `json:"price"`
 	RFQID         string `json:"rfqId"`

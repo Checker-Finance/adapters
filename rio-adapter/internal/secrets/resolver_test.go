@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/rio-adapter/internal/rio"
 	"github.com/Checker-Finance/adapters/rio-adapter/pkg/config"
@@ -54,7 +53,7 @@ func TestAWSResolver_Resolve_CacheHit(t *testing.T) {
 
 	mock := &mockProvider{}
 	cfg := config.Config{Env: "dev"}
-	r := NewAWSResolver(zap.NewNop(), cfg, mock, cache)
+	r := NewAWSResolver(cfg, mock, cache)
 
 	clientCfg, err := r.Resolve(context.Background(), "client-001")
 
@@ -79,7 +78,7 @@ func TestAWSResolver_Resolve_CacheMiss_FetchFromProvider(t *testing.T) {
 	}
 
 	cfg := config.Config{Env: "dev"}
-	r := NewAWSResolver(zap.NewNop(), cfg, mock, cache)
+	r := NewAWSResolver(cfg, mock, cache)
 
 	clientCfg, err := r.Resolve(context.Background(), "client-001")
 
@@ -104,7 +103,7 @@ func TestAWSResolver_Resolve_ProviderError(t *testing.T) {
 	}
 
 	cfg := config.Config{Env: "dev"}
-	r := NewAWSResolver(zap.NewNop(), cfg, mock, cache)
+	r := NewAWSResolver(cfg, mock, cache)
 
 	clientCfg, err := r.Resolve(context.Background(), "client-001")
 
@@ -121,7 +120,7 @@ func TestAWSResolver_Resolve_SecretNotFound(t *testing.T) {
 	}
 
 	cfg := config.Config{Env: "dev"}
-	r := NewAWSResolver(zap.NewNop(), cfg, mock, cache)
+	r := NewAWSResolver(cfg, mock, cache)
 
 	_, err := r.Resolve(context.Background(), "unknown-client")
 
@@ -160,7 +159,7 @@ func TestAWSResolver_Resolve_MissingRequiredFields(t *testing.T) {
 				},
 			}
 			cfg := config.Config{Env: "dev"}
-			r := NewAWSResolver(zap.NewNop(), cfg, mock, pkgsecrets.NewCache[rio.RioClientConfig](5*time.Minute))
+			r := NewAWSResolver(cfg, mock, pkgsecrets.NewCache[rio.RioClientConfig](5*time.Minute))
 
 			_, err := r.Resolve(context.Background(), "client-001")
 			assert.Error(t, err)
@@ -183,7 +182,7 @@ func TestAWSResolver_Resolve_CacheExpiration(t *testing.T) {
 	}
 
 	cfg := config.Config{Env: "dev"}
-	r := NewAWSResolver(zap.NewNop(), cfg, mock, cache)
+	r := NewAWSResolver(cfg, mock, cache)
 
 	// First call — cache miss, fetch from provider
 	_, err := r.Resolve(context.Background(), "client-001")
@@ -210,7 +209,7 @@ func TestAWSResolver_DiscoverClients(t *testing.T) {
 	}
 
 	cfg := config.Config{Env: "dev"}
-	r := NewAWSResolver(zap.NewNop(), cfg, mock, pkgsecrets.NewCache[rio.RioClientConfig](5*time.Minute))
+	r := NewAWSResolver(cfg, mock, pkgsecrets.NewCache[rio.RioClientConfig](5*time.Minute))
 
 	clients, err := r.DiscoverClients(context.Background())
 	require.NoError(t, err)
@@ -223,7 +222,7 @@ func TestAWSResolver_DiscoverClients_Empty(t *testing.T) {
 	}
 
 	cfg := config.Config{Env: "dev"}
-	r := NewAWSResolver(zap.NewNop(), cfg, mock, pkgsecrets.NewCache[rio.RioClientConfig](5*time.Minute))
+	r := NewAWSResolver(cfg, mock, pkgsecrets.NewCache[rio.RioClientConfig](5*time.Minute))
 
 	clients, err := r.DiscoverClients(context.Background())
 	require.NoError(t, err)
@@ -236,7 +235,7 @@ func TestAWSResolver_DiscoverClients_ProviderError(t *testing.T) {
 	}
 
 	cfg := config.Config{Env: "dev"}
-	r := NewAWSResolver(zap.NewNop(), cfg, mock, pkgsecrets.NewCache[rio.RioClientConfig](5*time.Minute))
+	r := NewAWSResolver(cfg, mock, pkgsecrets.NewCache[rio.RioClientConfig](5*time.Minute))
 
 	_, err := r.DiscoverClients(context.Background())
 	assert.Error(t, err)

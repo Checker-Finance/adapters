@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/zap"
 )
 
 // newIntegrationConfig returns a B2C2ClientConfig from environment variables.
@@ -37,7 +36,7 @@ func newIntegrationConfig(t *testing.T) *B2C2ClientConfig {
 func newIntegrationClient(t *testing.T) (*Client, *B2C2ClientConfig) {
 	t.Helper()
 	cfg := newIntegrationConfig(t)
-	return NewClient(zap.NewNop(), nil), cfg
+	return NewClient(nil), cfg
 }
 
 func TestIntegration_GetInstruments(t *testing.T) {

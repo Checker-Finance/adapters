@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"time"
 
+	"log/slog"
+
 	"github.com/nats-io/nats.go"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/internal/store"
-	"github.com/Checker-Finance/adapters/rio-adapter/pkg/config"
 	"github.com/Checker-Finance/adapters/pkg/model"
+	"github.com/Checker-Finance/adapters/rio-adapter/pkg/config"
 )
 
 // Service orchestrates Rio API operations: quote creation, order execution,
@@ -21,7 +22,6 @@ import (
 type Service struct {
 	ctx             context.Context
 	cfg             config.Config
-	logger          *zap.Logger
 	nc              *nats.Conn
 	client          *Client
 	configResolver  ConfigResolver
@@ -36,7 +36,6 @@ type Service struct {
 func NewService(
 	ctx context.Context,
 	cfg config.Config,
-	logger *zap.Logger,
 	nc *nats.Conn,
 	client *Client,
 	resolver ConfigResolver,
@@ -47,7 +46,6 @@ func NewService(
 	return &Service{
 		ctx:             ctx,
 		cfg:             cfg,
-		logger:          logger,
 		nc:              nc,
 		client:          client,
 		configResolver:  resolver,
@@ -67,9 +65,9 @@ func (s *Service) SetPoller(p *Poller) {
 func (s *Service) resolveConfig(ctx context.Context, clientID string) (*RioClientConfig, error) {
 	cfg, err := s.configResolver.Resolve(ctx, clientID)
 	if err != nil {
-		s.logger.Error("rio.resolve_config_failed",
-			zap.String("client", clientID),
-			zap.Error(err))
+		slog.Error("rio.resolve_config_failed",
+			"client", clientID,
+			"error", err)
 		return nil, fmt.Errorf("resolve client config for %q: %w", clientID, err)
 	}
 	return cfg, nil
@@ -77,11 +75,11 @@ func (s *Service) resolveConfig(ctx context.Context, clientID string) (*RioClien
 
 // CreateRFQ creates a new quote (RFQ) on Rio.
 func (s *Service) CreateRFQ(ctx context.Context, req model.RFQRequest) (*model.Quote, error) {
-	s.logger.Info("rio.create_rfq.start",
-		zap.String("client", req.ClientID),
-		zap.String("pair", req.CurrencyPair),
-		zap.String("side", req.Side),
-		zap.Float64("amount", req.Amount),
+	slog.Info("rio.create_rfq.start",
+		"client", req.ClientID,
+		"pair", req.CurrencyPair,
+		"side", req.Side,
+		"amount", req.Amount,
 	)
 
 	// Resolve per-client configuration
@@ -93,26 +91,26 @@ func (s *Service) CreateRFQ(ctx context.Context, req model.RFQRequest) (*model.Q
 	// Convert to Rio request format
 	rioReq := s.mapper.ToRioQuoteRequest(req, clientCfg.Country)
 
-	s.logger.Debug("rio.rfq_request",
-		zap.String("json", pretty(rioReq)))
+	slog.Debug("rio.rfq_request",
+		"json", pretty(rioReq))
 
 	// Call Rio API with per-client config
 	rioResp, err := s.client.CreateQuote(ctx, clientCfg, rioReq)
 	if err != nil {
-		s.logger.Error("rio.create_rfq.failed",
-			zap.String("client", req.ClientID),
-			zap.Error(err))
+		slog.Error("rio.create_rfq.failed",
+			"client", req.ClientID,
+			"error", err)
 		return nil, fmt.Errorf("rio quote creation failed: %w", err)
 	}
 
 	// Convert to canonical quote
 	quote := s.mapper.FromRioQuote(rioResp, req.ClientID)
 
-	s.logger.Info("rio.rfq_created",
-		zap.String("client", req.ClientID),
-		zap.String("quote_id", quote.ID),
-		zap.Float64("price", quote.Price),
-		zap.String("instrument", quote.Instrument),
+	slog.Info("rio.rfq_created",
+		"client", req.ClientID,
+		"quote_id", quote.ID,
+		"price", quote.Price,
+		"instrument", quote.Instrument,
 	)
 
 	return quote, nil
@@ -120,9 +118,9 @@ func (s *Service) CreateRFQ(ctx context.Context, req model.RFQRequest) (*model.Q
 
 // ExecuteRFQ creates an order from an existing quote on Rio.
 func (s *Service) ExecuteRFQ(ctx context.Context, clientID, quoteID string) (*model.TradeConfirmation, error) {
-	s.logger.Info("rio.execute_rfq.start",
-		zap.String("client", clientID),
-		zap.String("quote_id", quoteID),
+	slog.Info("rio.execute_rfq.start",
+		"client", clientID,
+		"quote_id", quoteID,
 	)
 
 	// Resolve per-client configuration
@@ -140,30 +138,30 @@ func (s *Service) ExecuteRFQ(ctx context.Context, clientID, quoteID string) (*mo
 	// Call Rio API with per-client config
 	orderResp, err := s.client.CreateOrder(ctx, clientCfg, orderReq)
 	if err != nil {
-		s.logger.Error("rio.execute_rfq.failed",
-			zap.String("client", clientID),
-			zap.String("quote_id", quoteID),
-			zap.Error(err))
+		slog.Error("rio.execute_rfq.failed",
+			"client", clientID,
+			"quote_id", quoteID,
+			"error", err)
 		return nil, fmt.Errorf("rio order creation failed: %w", err)
 	}
 
 	// Convert to canonical trade confirmation
 	trade := s.mapper.FromRioOrder(orderResp, clientID)
 
-	s.logger.Info("rio.order_created",
-		zap.String("client", clientID),
-		zap.String("order_id", trade.TradeID),
-		zap.String("quote_id", quoteID),
-		zap.String("status", trade.Status),
+	slog.Info("rio.order_created",
+		"client", clientID,
+		"order_id", trade.TradeID,
+		"quote_id", quoteID,
+		"status", trade.Status,
 	)
 
 	// Start async polling if not in terminal state.
 	// Use the service-level context (s.ctx) — not the HTTP request context —
 	// so polling survives after the HTTP response is sent.
 	if !IsTerminalStatus(orderResp.Status) && s.poller != nil {
-		s.logger.Info("rio.starting_status_poll",
-			zap.String("order_id", trade.TradeID),
-			zap.String("client", clientID))
+		slog.Info("rio.starting_status_poll",
+			"order_id", trade.TradeID,
+			"client", clientID)
 		go s.poller.PollTradeStatus(s.ctx, clientID, quoteID, trade.TradeID)
 	} else if IsTerminalStatus(orderResp.Status) {
 		// Immediately sync terminal trades
@@ -183,10 +181,10 @@ func (s *Service) FetchTradeStatus(ctx context.Context, clientID, orderID string
 
 	order, err := s.client.GetOrder(ctx, clientCfg, orderID)
 	if err != nil {
-		s.logger.Warn("rio.fetch_trade_status.failed",
-			zap.String("client", clientID),
-			zap.String("order_id", orderID),
-			zap.Error(err))
+		slog.Warn("rio.fetch_trade_status.failed",
+			"client", clientID,
+			"order_id", orderID,
+			"error", err)
 		return nil, err
 	}
 
@@ -208,8 +206,8 @@ func (s *Service) BuildTradeConfirmationFromOrder(clientID, orderID string, orde
 func (s *Service) RegisterOrderWebhook(ctx context.Context) error {
 	clients, err := s.configResolver.DiscoverClients(ctx)
 	if err != nil || len(clients) == 0 {
-		s.logger.Warn("rio.register_webhook.no_clients",
-			zap.Error(err))
+		slog.Warn("rio.register_webhook.no_clients",
+			"error", err)
 		return fmt.Errorf("no client configs available for webhook registration")
 	}
 
@@ -218,44 +216,44 @@ func (s *Service) RegisterOrderWebhook(ctx context.Context) error {
 	for _, clientID := range clients {
 		clientCfg, err := s.configResolver.Resolve(ctx, clientID)
 		if err != nil {
-			s.logger.Error("rio.register_webhook.resolve_failed",
-				zap.String("client", clientID),
-				zap.Error(err))
+			slog.Error("rio.register_webhook.resolve_failed",
+				"client", clientID,
+				"error", err)
 			lastErr = err
 			continue
 		}
 
 		if clientCfg.WebhookURL == "" {
-			s.logger.Debug("rio.register_webhook.skipped_no_url",
-				zap.String("client", clientID))
+			slog.Debug("rio.register_webhook.skipped_no_url",
+				"client", clientID)
 			continue
 		}
 
 		resp, err := s.client.RegisterWebhook(ctx, clientCfg, clientCfg.WebhookURL, true)
 		if err != nil {
-			s.logger.Error("rio.register_webhook.failed",
-				zap.String("client", clientID),
-				zap.String("callback_url", clientCfg.WebhookURL),
-				zap.Error(err))
+			slog.Error("rio.register_webhook.failed",
+				"client", clientID,
+				"callback_url", clientCfg.WebhookURL,
+				"error", err)
 			lastErr = err
 			continue
 		}
 
 		registered++
-		s.logger.Info("rio.webhook_registered",
-			zap.String("client", clientID),
-			zap.String("webhook_id", resp.ID),
-			zap.String("url", resp.URL),
-			zap.String("type", resp.Type))
+		slog.Info("rio.webhook_registered",
+			"client", clientID,
+			"webhook_id", resp.ID,
+			"url", resp.URL,
+			"type", resp.Type)
 	}
 
 	if registered == 0 {
 		return fmt.Errorf("webhook registration failed for all %d clients: %w", len(clients), lastErr)
 	}
 
-	s.logger.Info("rio.webhooks_registered",
-		zap.Int("registered", registered),
-		zap.Int("total", len(clients)))
+	slog.Info("rio.webhooks_registered",
+		"registered", registered,
+		"total", len(clients))
 
 	return nil
 }
@@ -265,15 +263,15 @@ func (s *Service) syncTerminalTrade(ctx context.Context, trade *model.TradeConfi
 	// Sync to legacy database
 	if s.tradeSyncWriter != nil {
 		if err := s.tradeSyncWriter.SyncTradeUpsert(ctx, trade); err != nil {
-			s.logger.Warn("rio.trade_sync_failed",
-				zap.String("order_id", trade.TradeID),
-				zap.String("client", trade.ClientID),
-				zap.Error(err))
+			slog.Warn("rio.trade_sync_failed",
+				"order_id", trade.TradeID,
+				"client", trade.ClientID,
+				"error", err)
 		} else {
-			s.logger.Info("rio.trade_sync_complete",
-				zap.String("order_id", trade.TradeID),
-				zap.String("client", trade.ClientID),
-				zap.String("status", trade.Status))
+			slog.Info("rio.trade_sync_complete",
+				"order_id", trade.TradeID,
+				"client", trade.ClientID,
+				"status", trade.Status)
 		}
 	}
 
@@ -289,9 +287,9 @@ func (s *Service) syncTerminalTrade(ctx context.Context, trade *model.TradeConfi
 		"final":     true,
 		"timestamp": time.Now().UTC(),
 	}); err != nil {
-		s.logger.Warn("rio.publish_failed",
-			zap.String("subject", subject),
-			zap.Error(err))
+		slog.Warn("rio.publish_failed",
+			"subject", subject,
+			"error", err)
 	}
 }
 

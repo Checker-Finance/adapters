@@ -2,10 +2,10 @@ package api
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/shopspring/decimal"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/kiiex-adapter/internal/order"
 )
@@ -17,13 +17,12 @@ type OrderService interface {
 
 // KiiexHandler handles HTTP API requests for Kiiex operations.
 type KiiexHandler struct {
-	logger  *zap.Logger
 	service OrderService
 }
 
 // NewKiiexHandler creates a new KiiexHandler.
-func NewKiiexHandler(logger *zap.Logger, service OrderService) *KiiexHandler {
-	return &KiiexHandler{logger: logger, service: service}
+func NewKiiexHandler(service OrderService) *KiiexHandler {
+	return &KiiexHandler{service: service}
 }
 
 // ExecuteOrderHandler handles POST /api/v1/orders.
@@ -62,16 +61,16 @@ func (h *KiiexHandler) ExecuteOrderHandler(c *fiber.Ctx) error {
 		Type:           req.Type,
 	}
 
-	h.logger.Info("kiiex.execute_order.rest",
-		zap.String("client", req.ClientID),
-		zap.String("pair", req.InstrumentPair),
-		zap.String("side", req.Side),
+	slog.Info("kiiex.execute_order.rest",
+		"client", req.ClientID,
+		"pair", req.InstrumentPair,
+		"side", req.Side,
 	)
 
 	if err := h.service.ExecuteOrder(c.Context(), cmd); err != nil {
-		h.logger.Error("kiiex.execute_order.failed",
-			zap.String("client", req.ClientID),
-			zap.Error(err))
+		slog.Error("kiiex.execute_order.failed",
+			"client", req.ClientID,
+			"error", err)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 

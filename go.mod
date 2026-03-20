@@ -17,7 +17,6 @@ require (
 	github.com/redis/go-redis/v9 v9.16.0
 	github.com/shopspring/decimal v1.3.1
 	github.com/stretchr/testify v1.11.1
-	go.uber.org/zap v1.27.0
 )
 
 require (
@@ -41,6 +40,7 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
@@ -56,7 +56,6 @@ require (
 	github.com/valyala/fasthttp v1.51.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
-	go.uber.org/multierr v1.10.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/crypto v0.41.0 // indirect
 	golang.org/x/net v0.43.0 // indirect

@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"go.uber.org/zap"
 )
 
 // MessageHandler is called when a message is received
@@ -19,7 +19,6 @@ type MessageHandler func(response *Response)
 type Client struct {
 	url            string
 	conn           *websocket.Conn
-	logger         *zap.Logger
 	sequence       int64
 	handlers       []MessageHandler
 	handlersMu     sync.RWMutex
@@ -30,10 +29,9 @@ type Client struct {
 }
 
 // NewClient creates a new AlphaPoint WebSocket client
-func NewClient(url string, logger *zap.Logger) *Client {
+func NewClient(url string) *Client {
 	return &Client{
 		url:            url,
-		logger:         logger,
 		handlers:       make([]MessageHandler, 0),
 		done:           make(chan struct{}),
 		reconnectDelay: 5 * time.Second,
@@ -42,7 +40,7 @@ func NewClient(url string, logger *zap.Logger) *Client {
 
 // Connect establishes a WebSocket connection
 func (c *Client) Connect(ctx context.Context) error {
-	c.logger.Info("Connecting to WebSocket", zap.String("url", c.url))
+	slog.Info("Connecting to WebSocket", "url", c.url)
 
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 10 * time.Second,
@@ -55,7 +53,7 @@ func (c *Client) Connect(ctx context.Context) error {
 
 	c.conn = conn
 	c.setConnected(true)
-	c.logger.Info("Connected to WebSocket")
+	slog.Info("Connected to WebSocket")
 
 	// Start read loop
 	go c.readLoop()
@@ -110,9 +108,9 @@ func (c *Client) SendMessage(ctx context.Context, operationName string, payload 
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	c.logger.Debug("Sending message",
-		zap.String("operation", operationName),
-		zap.Int("sequence", seq),
+	slog.Debug("Sending message",
+		"operation", operationName,
+		"sequence", seq,
 	)
 
 	if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
@@ -125,7 +123,7 @@ func (c *Client) SendMessage(ctx context.Context, operationName string, payload 
 func (c *Client) readLoop() {
 	defer func() {
 		c.setConnected(false)
-		c.logger.Info("WebSocket read loop exited")
+		slog.Info("WebSocket read loop exited")
 	}()
 
 	for {
@@ -136,19 +134,19 @@ func (c *Client) readLoop() {
 			_, message, err := c.conn.ReadMessage()
 			if err != nil {
 				if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-					c.logger.Info("WebSocket closed normally")
+					slog.Info("WebSocket closed normally")
 					return
 				}
-				c.logger.Error("Error reading WebSocket message", zap.Error(err))
+				slog.Error("Error reading WebSocket message", "error", err)
 				c.scheduleReconnect()
 				return
 			}
 
-			c.logger.Debug("Received message", zap.String("payload", string(message)))
+			slog.Debug("Received message", "payload", string(message))
 
 			var response Response
 			if err := json.Unmarshal(message, &response); err != nil {
-				c.logger.Error("Failed to unmarshal response", zap.Error(err))
+				slog.Error("Failed to unmarshal response", "error", err)
 				continue
 			}
 
@@ -167,14 +165,14 @@ func (c *Client) notifyHandlers(response *Response) {
 }
 
 func (c *Client) scheduleReconnect() {
-	c.logger.Info("Scheduling reconnection", zap.Duration("delay", c.reconnectDelay))
+	slog.Info("Scheduling reconnection", "delay", c.reconnectDelay)
 
 	time.AfterFunc(c.reconnectDelay, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		if err := c.Connect(ctx); err != nil {
-			c.logger.Error("Reconnection failed", zap.Error(err))
+			slog.Error("Reconnection failed", "error", err)
 			c.scheduleReconnect()
 		}
 	})

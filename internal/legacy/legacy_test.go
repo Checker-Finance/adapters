@@ -3,16 +3,13 @@ package legacy
 import (
 	"testing"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 func TestNewRFQSweeper(t *testing.T) {
-	logger := zap.NewNop()
 	interval := 5 * time.Minute
 	ttl := 10 * time.Minute
 
-	sweeper := NewRFQSweeper(nil, logger, interval, ttl)
+	sweeper := NewRFQSweeper(nil, interval, ttl)
 
 	if sweeper == nil {
 		t.Fatal("expected non-nil sweeper")
@@ -23,21 +20,13 @@ func TestNewRFQSweeper(t *testing.T) {
 	if sweeper.ttl != ttl {
 		t.Errorf("expected ttl %v, got %v", ttl, sweeper.ttl)
 	}
-	if sweeper.logger != logger {
-		t.Error("expected logger to match")
-	}
 }
 
 func TestNewTradeSyncWriter(t *testing.T) {
-	logger := zap.NewNop()
-
-	writer := NewTradeSyncWriter(nil, logger, "test-adapter")
+	writer := NewTradeSyncWriter(nil, "test-adapter")
 
 	if writer == nil {
 		t.Fatal("expected non-nil writer")
-	}
-	if writer.logger != logger {
-		t.Error("expected logger to match")
 	}
 	if writer.source != "test-adapter" {
 		t.Errorf("expected source=test-adapter, got %s", writer.source)
@@ -45,8 +34,7 @@ func TestNewTradeSyncWriter(t *testing.T) {
 }
 
 func TestTradeSyncWriter_SyncTradeUpsert_NilTrade(t *testing.T) {
-	logger := zap.NewNop()
-	writer := NewTradeSyncWriter(nil, logger, "test-adapter")
+	writer := NewTradeSyncWriter(nil, "test-adapter")
 
 	// Nil trade should be a no-op
 	err := writer.SyncTradeUpsert(t.Context(), nil)

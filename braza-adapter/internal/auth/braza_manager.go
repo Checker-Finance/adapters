@@ -5,24 +5,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 // BrazaManager handles JWT authentication and refresh lifecycle for the Braza API.
 // It is called by the multi-tenant auth.Manager for a specific tenant/client/venue.
 type BrazaManager struct {
-	logger   *zap.Logger
-	baseURL  string
-	client   *http.Client
+	baseURL string
+	client  *http.Client
 }
 
 // NewBrazaManager creates a new Braza-specific auth manager for the given base URL.
-func NewBrazaManager(logger *zap.Logger, baseURL string) *BrazaManager {
+func NewBrazaManager(baseURL string) *BrazaManager {
 	return &BrazaManager{
-		logger:  logger,
 		baseURL: baseURL,
 		client:  &http.Client{Timeout: 5 * time.Second},
 	}
@@ -52,7 +49,7 @@ func (m *BrazaManager) GetValidToken(
 					m.saveToken(ctx, cache, key, newTok)
 					return newTok.AccessToken, nil
 				}
-				m.logger.Warn("braza.refresh_failed", zap.Error(err))
+				slog.Warn("braza.refresh_failed", "error", err)
 			}
 		}
 	}
@@ -60,7 +57,7 @@ func (m *BrazaManager) GetValidToken(
 	// 2. Fallback to login
 	newTok, err := m.login(ctx, creds)
 	if err != nil {
-		m.logger.Error("braza.login_failed", zap.Error(err))
+		slog.Error("braza.login_failed", "error", err)
 		return "", err
 	}
 	m.saveToken(ctx, cache, key, newTok)
@@ -100,7 +97,7 @@ func (m *BrazaManager) login(ctx context.Context, creds Credentials) (TokenBundl
 		tr.Exp = time.Now().Add(time.Hour).Unix()
 	}
 
-	m.logger.Info("braza.login_success", zap.String("user", creds.Username))
+	slog.Info("braza.login_success", "user", creds.Username)
 	return tr, nil
 }
 
@@ -136,7 +133,7 @@ func (m *BrazaManager) refresh(ctx context.Context, refreshToken string) (TokenB
 		tr.Exp = time.Now().Add(time.Hour).Unix()
 	}
 
-	m.logger.Info("braza.refresh_success")
+	slog.Info("braza.refresh_success")
 	return tr, nil
 }
 

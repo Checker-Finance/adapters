@@ -30,24 +30,24 @@ type ConfigResolver interface {
 
 // RFQRequest is the payload for POST /request_for_quote/.
 type RFQRequest struct {
-	Instrument   string `json:"instrument"`              // e.g. "BTCUSD.SPOT"
-	Side         string `json:"side"`                    // "buy" or "sell"
-	Quantity     string `json:"quantity"`                // string decimal
-	ClientRFQID  string `json:"client_rfq_id"`           // idempotency key
+	Instrument    string `json:"instrument"`               // e.g. "BTCUSD.SPOT"
+	Side          string `json:"side"`                     // "buy" or "sell"
+	Quantity      string `json:"quantity"`                 // string decimal
+	ClientRFQID   string `json:"client_rfq_id"`            // idempotency key
 	ExecutingUnit string `json:"executing_unit,omitempty"` // optional
 }
 
 // RFQResponse is the response from POST /request_for_quote/.
 type RFQResponse struct {
-	RFQID       string `json:"rfq_id"`
-	ClientRFQID string `json:"client_rfq_id"`
-	Instrument  string `json:"instrument"`
-	Side        string `json:"side"`
-	Quantity    string `json:"quantity"`
-	Price       string `json:"price"`
-	ValidUntil  string `json:"valid_until"`
-	IsIndicative bool  `json:"is_indicative"`
-	Created     string `json:"created"`
+	RFQID        string `json:"rfq_id"`
+	ClientRFQID  string `json:"client_rfq_id"`
+	Instrument   string `json:"instrument"`
+	Side         string `json:"side"`
+	Quantity     string `json:"quantity"`
+	Price        string `json:"price"`
+	ValidUntil   string `json:"valid_until"`
+	IsIndicative bool   `json:"is_indicative"`
+	Created      string `json:"created"`
 }
 
 //
@@ -181,20 +181,20 @@ type QuoteArrivedEvent struct {
 
 // FillArrivedEvent is published to exchange.outbound.orders / inbound.fills.creates.
 type FillArrivedEvent struct {
-	OrderID           string `json:"orderId"`
-	FillID            string `json:"fillId"`
-	ExternalOrderID   string `json:"externalOrderId"`
-	InstrumentPair    string `json:"instrumentPair"`
-	QuantityFilled    string `json:"quantityFilled"`
+	OrderID            string `json:"orderId"`
+	FillID             string `json:"fillId"`
+	ExternalOrderID    string `json:"externalOrderId"`
+	InstrumentPair     string `json:"instrumentPair"`
+	QuantityFilled     string `json:"quantityFilled"`
 	QuantityCumulative string `json:"quantityCumulative"`
-	Price             string `json:"price"`
-	Side              string `json:"side"`
-	Status            string `json:"status"`
-	ClientOrderID     string `json:"clientOrderId"`
-	RequestForQuoteID string `json:"requestForQuoteId"`
-	Provider          string `json:"provider"`
-	SourceType        string `json:"sourceType"`
-	ExecutionType     string `json:"executionType"`
+	Price              string `json:"price"`
+	Side               string `json:"side"`
+	Status             string `json:"status"`
+	ClientOrderID      string `json:"clientOrderId"`
+	RequestForQuoteID  string `json:"requestForQuoteId"`
+	Provider           string `json:"provider"`
+	SourceType         string `json:"sourceType"`
+	ExecutionType      string `json:"executionType"`
 }
 
 // OrderCanceledEvent is published to exchange.outbound.orders / returned.orders.canceled.

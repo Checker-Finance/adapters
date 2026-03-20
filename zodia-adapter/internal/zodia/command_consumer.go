@@ -3,24 +3,23 @@ package zodia
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"time"
 
 	"github.com/Checker-Finance/adapters/pkg/model"
 	"github.com/nats-io/nats.go"
-	"go.uber.org/zap"
 )
 
 // CommandConsumer subscribes to NATS command subjects and routes them to the service.
 type CommandConsumer struct {
-	nc     *nats.Conn
-	svc    *Service
-	logger *zap.Logger
-	subs   []*nats.Subscription
+	nc   *nats.Conn
+	svc  *Service
+	subs []*nats.Subscription
 }
 
 // NewCommandConsumer creates a new CommandConsumer.
-func NewCommandConsumer(nc *nats.Conn, svc *Service, logger *zap.Logger) *CommandConsumer {
-	return &CommandConsumer{nc: nc, svc: svc, logger: logger}
+func NewCommandConsumer(nc *nats.Conn, svc *Service) *CommandConsumer {
+	return &CommandConsumer{nc: nc, svc: svc}
 }
 
 // Subscribe registers NATS subscriptions for quote request and trade execute commands.
@@ -29,22 +28,22 @@ func (c *CommandConsumer) Subscribe(ctx context.Context, quoteSubject, tradeSubj
 	subQ, err := c.nc.Subscribe(quoteSubject, func(msg *nats.Msg) {
 		var env model.Envelope
 		if err := json.Unmarshal(msg.Data, &env); err != nil {
-			c.logger.Error("zodia.cmd.quote_request.unmarshal_failed", zap.Error(err))
+			slog.Error("zodia.cmd.quote_request.unmarshal_failed", "error", err)
 			return
 		}
 		var req model.QuoteRequest
 		if err := json.Unmarshal(env.Payload, &req); err != nil {
-			c.logger.Error("zodia.cmd.quote_request.payload_failed",
-				zap.String("client", env.ClientID),
-				zap.Error(err))
+			slog.Error("zodia.cmd.quote_request.payload_failed",
+				"client", env.ClientID,
+				"error", err)
 			return
 		}
 		msgCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 		if err := c.svc.HandleQuoteRequest(msgCtx, env, req); err != nil {
-			c.logger.Error("zodia.cmd.quote_request.handle_failed",
-				zap.String("client", env.ClientID),
-				zap.Error(err))
+			slog.Error("zodia.cmd.quote_request.handle_failed",
+				"client", env.ClientID,
+				"error", err)
 		}
 	})
 	if err != nil {
@@ -55,22 +54,22 @@ func (c *CommandConsumer) Subscribe(ctx context.Context, quoteSubject, tradeSubj
 	subT, err := c.nc.Subscribe(tradeSubject, func(msg *nats.Msg) {
 		var env model.Envelope
 		if err := json.Unmarshal(msg.Data, &env); err != nil {
-			c.logger.Error("zodia.cmd.trade_execute.unmarshal_failed", zap.Error(err))
+			slog.Error("zodia.cmd.trade_execute.unmarshal_failed", "error", err)
 			return
 		}
 		var cmd model.TradeCommand
 		if err := json.Unmarshal(env.Payload, &cmd); err != nil {
-			c.logger.Error("zodia.cmd.trade_execute.payload_failed",
-				zap.String("client", env.ClientID),
-				zap.Error(err))
+			slog.Error("zodia.cmd.trade_execute.payload_failed",
+				"client", env.ClientID,
+				"error", err)
 			return
 		}
 		msgCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		if err := c.svc.HandleTradeExecute(msgCtx, env, cmd); err != nil {
-			c.logger.Error("zodia.cmd.trade_execute.handle_failed",
-				zap.String("client", env.ClientID),
-				zap.Error(err))
+			slog.Error("zodia.cmd.trade_execute.handle_failed",
+				"client", env.ClientID,
+				"error", err)
 		}
 	})
 	if err != nil {
@@ -78,9 +77,9 @@ func (c *CommandConsumer) Subscribe(ctx context.Context, quoteSubject, tradeSubj
 	}
 	c.subs = append(c.subs, subT)
 
-	c.logger.Info("zodia.command_consumer.subscribed",
-		zap.String("quote_subject", quoteSubject),
-		zap.String("trade_subject", tradeSubject))
+	slog.Info("zodia.command_consumer.subscribed",
+		"quote_subject", quoteSubject,
+		"trade_subject", tradeSubject)
 	return nil
 }
 

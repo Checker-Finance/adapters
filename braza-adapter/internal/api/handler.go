@@ -2,11 +2,11 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/braza"
 	"github.com/Checker-Finance/adapters/internal/store"
@@ -14,7 +14,6 @@ import (
 )
 
 type Handler struct {
-	Logger  *zap.Logger
 	Service *braza.Service
 	Store   store.Store
 }
@@ -29,7 +28,7 @@ func (h *Handler) GetBalances(c *fiber.Ctx) error {
 	ctx := context.Background()
 	rows, err := h.Store.GetClientBalances(ctx, clientID)
 	if err != nil {
-		h.Logger.Error("get_balances_failed", zap.String("client_id", clientID), zap.Error(err))
+		slog.Error("get_balances_failed", "client_id", clientID, "error", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
@@ -83,7 +82,7 @@ func (h *Handler) ExecuteRFQHandler(c *fiber.Ctx) error {
 		ExecutedAt:      time.Now().Unix(),
 	}
 
-	h.Logger.Info("attempting to execute quote", zap.String("client", req.ClientID), zap.String("quoteID", req.QuoteID))
+	slog.Info("attempting to execute quote", "client", req.ClientID, "quoteID", req.QuoteID)
 	trade, err := h.Service.ExecuteRFQ(c.Context(), req.ClientID, req.QuoteID)
 	if err != nil {
 		res.ErrorMsg = err.Error()
@@ -91,10 +90,10 @@ func (h *Handler) ExecuteRFQHandler(c *fiber.Ctx) error {
 	}
 
 	res.Status = trade.StatusOrder
-	h.Logger.Info("successfully executed quote",
-		zap.String("client", req.ClientID),
-		zap.String("status", res.Status),
-		zap.String("quoteID", req.QuoteID))
-	
+	slog.Info("successfully executed quote",
+		"client", req.ClientID,
+		"status", res.Status,
+		"quoteID", req.QuoteID)
+
 	return c.Status(fiber.StatusOK).JSON(res)
 }

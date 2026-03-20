@@ -13,7 +13,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/pkg/model"
 	"github.com/Checker-Finance/adapters/zodia-adapter/internal/zodia"
@@ -118,7 +117,7 @@ func (m *mockTradeSync) SyncTradeUpsert(_ context.Context, _ *model.TradeConfirm
 // ─── test helpers ─────────────────────────────────────────────────────────────
 
 func newWebhookTestApp(st *mockStore, mapper WebhookMapper, ts *mockTradeSync) *fiber.App {
-	h := NewWebhookHandler(zap.NewNop(), st, mapper, ts, nil) // nil publisher
+	h := NewWebhookHandler(st, mapper, ts, nil) // nil publisher
 	app := fiber.New()
 	app.Post("/webhooks/zodia/transactions", h.Handle)
 	return app

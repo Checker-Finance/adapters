@@ -2,9 +2,9 @@ package api
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/pkg/model"
 )
@@ -22,15 +22,13 @@ type ClientValidator interface {
 
 // XFXHandler handles HTTP API requests for XFX operations.
 type XFXHandler struct {
-	logger    *zap.Logger
 	service   RFQService
 	validator ClientValidator
 }
 
 // NewXFXHandler creates a new XFXHandler.
-func NewXFXHandler(logger *zap.Logger, service RFQService, validator ClientValidator) *XFXHandler {
+func NewXFXHandler(service RFQService, validator ClientValidator) *XFXHandler {
 	return &XFXHandler{
-		logger:    logger,
 		service:   service,
 		validator: validator,
 	}
@@ -54,9 +52,9 @@ func (h *XFXHandler) CreateRFQHandler(c *fiber.Ctx) error {
 
 	quote, err := h.service.CreateRFQ(c.Context(), r)
 	if err != nil {
-		h.logger.Error("xfx.create_rfq.failed",
-			zap.String("client", req.ClientID),
-			zap.Error(err))
+		slog.Error("xfx.create_rfq.failed",
+			"client", req.ClientID,
+			"error", err)
 		return c.Status(fiber.StatusBadRequest).JSON(RFQResponse{
 			QuoteID:  req.ID,
 			ErrorMsg: err.Error(),
@@ -90,16 +88,16 @@ func (h *XFXHandler) ExecuteRFQHandler(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "quoteId is required"})
 	}
 
-	h.logger.Info("xfx.execute_rfq",
-		zap.String("client", req.ClientID),
-		zap.String("quote_id", quoteID))
+	slog.Info("xfx.execute_rfq",
+		"client", req.ClientID,
+		"quote_id", quoteID)
 
 	trade, err := h.service.ExecuteRFQ(c.Context(), req.ClientID, quoteID)
 	if err != nil {
-		h.logger.Error("xfx.execute_rfq.failed",
-			zap.String("client", req.ClientID),
-			zap.String("quote_id", quoteID),
-			zap.Error(err))
+		slog.Error("xfx.execute_rfq.failed",
+			"client", req.ClientID,
+			"quote_id", quoteID,
+			"error", err)
 		return c.Status(fiber.StatusBadRequest).JSON(RFQExecutionResponse{
 			OrderID:  req.OrderID,
 			ErrorMsg: err.Error(),

@@ -1,68 +1,48 @@
 package logger
 
 import (
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+	"log/slog"
+	"os"
+	"strings"
+	"time"
 )
 
-var log *zap.Logger
-var sugar *zap.SugaredLogger
-
-// Init initializes the global logger.
-// Environment can be "dev", "uat", or "prod".
+// Init initializes the global slog default logger.
+// env: "dev" → TextHandler (stdout), anything else → JSONHandler (stdout).
 func Init(service, env, level string) {
-	var cfg zap.Config
+	var lvl slog.Level
+	switch strings.ToLower(level) {
+	case "debug":
+		lvl = slog.LevelDebug
+	case "warn", "warning":
+		lvl = slog.LevelWarn
+	case "error":
+		lvl = slog.LevelError
+	default:
+		lvl = slog.LevelInfo
+	}
 
+	opts := &slog.HandlerOptions{
+		AddSource: true,
+		Level:     lvl,
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey {
+				a.Value = slog.StringValue(a.Value.Time().Format(time.RFC3339Nano))
+			}
+			return a
+		},
+	}
+
+	var handler slog.Handler
 	if env == "dev" {
-		cfg = zap.NewDevelopmentConfig()
-		cfg.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+		handler = slog.NewTextHandler(os.Stdout, opts)
 	} else {
-		cfg = zap.NewProductionConfig()
-	}
-	cfg.EncoderConfig.EncodeTime = zapcore.RFC3339NanoTimeEncoder
-
-	// Level override
-	if lvl, err := zapcore.ParseLevel(level); err == nil {
-		cfg.Level = zap.NewAtomicLevelAt(lvl)
+		handler = slog.NewJSONHandler(os.Stdout, opts)
 	}
 
-	cfg.OutputPaths = []string{"stdout"}
-	cfg.ErrorOutputPaths = []string{"stderr"}
-
-	logger, err := cfg.Build(zap.AddCaller(), zap.AddCallerSkip(1))
-	if err != nil {
-		panic("failed to initialize logger: " + err.Error())
-	}
-
-	log = logger
-	sugar = logger.Sugar()
-
-	sugar.Infow("logger initialized",
-		"service", service,
-		"env", env,
-		"level", level,
-	)
+	slog.SetDefault(slog.New(handler).With("service", service, "env", env))
+	slog.Info("logger initialized", "level", level)
 }
 
-// L returns the base structured Zap logger (for performance-sensitive paths).
-func L() *zap.Logger {
-	if log == nil {
-		Init("unknown", "dev", "info")
-	}
-	return log
-}
-
-// S returns the Sugared logger (for convenience).
-func S() *zap.SugaredLogger {
-	if sugar == nil {
-		Init("unknown", "dev", "info")
-	}
-	return sugar
-}
-
-// Sync flushes any buffered logs (defer this in main()).
-func Sync() {
-	if log != nil {
-		_ = log.Sync()
-	}
-}
+// Sync is a no-op retained for call-site compatibility (slog does not buffer).
+func Sync() {}

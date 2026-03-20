@@ -14,7 +14,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/pkg/model"
 )
@@ -45,7 +44,7 @@ func (m *mockValidator) IsKnownClient(_ context.Context, _ string) bool { return
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 func newTestHandler(svc RFQService, known bool) *ZodiaHandler {
-	return NewZodiaHandler(zap.NewNop(), svc, &mockValidator{known: known})
+	return NewZodiaHandler(svc, &mockValidator{known: known})
 }
 
 func newTestApp(svc RFQService, known bool) *fiber.App {

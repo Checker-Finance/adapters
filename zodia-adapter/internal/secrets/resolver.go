@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"go.uber.org/zap"
-
-	"github.com/Checker-Finance/adapters/zodia-adapter/internal/zodia"
-	"github.com/Checker-Finance/adapters/zodia-adapter/pkg/config"
 	intsecrets "github.com/Checker-Finance/adapters/internal/secrets"
 	pkgsecrets "github.com/Checker-Finance/adapters/pkg/secrets"
+	"github.com/Checker-Finance/adapters/zodia-adapter/internal/zodia"
+	"github.com/Checker-Finance/adapters/zodia-adapter/pkg/config"
 )
 
 // AWSResolver resolves per-client Zodia configuration from AWS Secrets Manager.
@@ -23,12 +21,11 @@ type AWSResolver struct {
 
 // NewAWSResolver constructs a Zodia-specific config resolver.
 func NewAWSResolver(
-	logger *zap.Logger,
 	cfg config.Config,
 	provider pkgsecrets.Provider,
 	cache *pkgsecrets.Cache[zodia.ZodiaClientConfig],
 ) *AWSResolver {
-	inner := intsecrets.NewAWSResolver(logger, cfg.Env, "zodia", provider, cache)
+	inner := intsecrets.NewAWSResolver(cfg.Env, "zodia", provider, cache)
 	return &AWSResolver{inner: inner}
 }
 

@@ -3,9 +3,9 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/capa-adapter/internal/capa"
 	"github.com/Checker-Finance/adapters/internal/store"
@@ -18,7 +18,6 @@ type WebhookProcessor interface {
 
 // WebhookAPIHandler handles the POST /webhooks/capa/transactions route.
 type WebhookAPIHandler struct {
-	logger    *zap.Logger
 	processor WebhookProcessor
 	store     store.Store
 	resolver  capa.ConfigResolver
@@ -26,13 +25,11 @@ type WebhookAPIHandler struct {
 
 // NewWebhookAPIHandler creates a new WebhookAPIHandler.
 func NewWebhookAPIHandler(
-	logger *zap.Logger,
 	processor WebhookProcessor,
 	st store.Store,
 	resolver capa.ConfigResolver,
 ) *WebhookAPIHandler {
 	return &WebhookAPIHandler{
-		logger:    logger,
 		processor: processor,
 		store:     st,
 		resolver:  resolver,
@@ -46,9 +43,9 @@ func (h *WebhookAPIHandler) HandleWebhook(c *fiber.Ctx) error {
 
 	var event capa.CapaWebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
-		h.logger.Warn("capa.webhook.parse_error",
-			zap.Error(err),
-			zap.String("body", string(body)))
+		slog.Warn("capa.webhook.parse_error",
+			"error", err,
+			"body", string(body))
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid payload",
 		})
@@ -68,11 +65,11 @@ func (h *WebhookAPIHandler) HandleWebhook(c *fiber.Ctx) error {
 		}
 	}
 
-	h.logger.Info("capa.webhook.incoming",
-		zap.String("event", event.Event),
-		zap.String("tx_id", event.TransactionID),
-		zap.String("status", event.Status),
-		zap.String("client_id", clientID))
+	slog.Info("capa.webhook.incoming",
+		"event", event.Event,
+		"tx_id", event.TransactionID,
+		"status", event.Status,
+		"client_id", clientID)
 
 	signature := c.Get("X-Capa-Signature")
 	if signature == "" {
@@ -86,9 +83,9 @@ func (h *WebhookAPIHandler) HandleWebhook(c *fiber.Ctx) error {
 				"error": "invalid signature",
 			})
 		}
-		h.logger.Error("capa.webhook.process_error",
-			zap.String("tx_id", event.TransactionID),
-			zap.Error(err))
+		slog.Error("capa.webhook.process_error",
+			"tx_id", event.TransactionID,
+			"error", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to process webhook",
 		})

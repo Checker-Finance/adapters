@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/zap"
 )
 
 // newIntegrationConfig returns a RioClientConfig from environment variables.
@@ -37,7 +36,7 @@ func newIntegrationConfig(t *testing.T) *RioClientConfig {
 func newIntegrationClient(t *testing.T) (*Client, *RioClientConfig) {
 	t.Helper()
 	cfg := newIntegrationConfig(t)
-	return NewClient(zap.NewNop(), nil), cfg
+	return NewClient(nil), cfg
 }
 
 func TestIntegration_CreateQuote_Buy(t *testing.T) {

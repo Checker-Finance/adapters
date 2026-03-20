@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -34,14 +35,14 @@ func main() {
 	cfg.Venue = "capa"
 
 	logger.Init(cfg.ServiceName, cfg.Env, cfg.LogLevel)
-	logg := logger.S()
-	logg.Info("starting [capa-adapter]...")
-	logg.Info("connection to DSN: ", utils.MaskDSN(cfg.DatabaseURL))
+	slog.Info("starting [capa-adapter]...")
+	slog.Info("connection to DSN", "dsn", utils.MaskDSN(cfg.DatabaseURL))
 
 	// --- AWS Secrets Manager provider ---
 	awsProvider, err := secrets.NewAWSProvider(cfg.AWSRegion)
 	if err != nil {
-		logg.Fatalw("failed to create AWS Secrets Manager provider", "error", err)
+		slog.Error("failed to create AWS Secrets Manager provider", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Per-client config resolver (secrets cached in-memory) ---
@@ -50,7 +51,6 @@ func main() {
 	go configCache.StartCleaner(cfg.CleanupFreq, stopCleaner)
 
 	resolver := internalsecrets.NewAWSResolver(
-		logg.Desugar(),
 		*cfg,
 		awsProvider,
 		configCache,
@@ -59,21 +59,23 @@ func main() {
 	// --- Discover configured clients ---
 	clients, err := resolver.DiscoverClients(ctx)
 	if err != nil {
-		logg.Warnw("failed to discover clients from AWS Secrets Manager", "error", err)
+		slog.Warn("failed to discover clients from AWS Secrets Manager", "error", err)
 	} else {
-		logg.Infow("discovered Capa clients", "count", len(clients), "clients", clients)
+		slog.Info("discovered Capa clients", "count", len(clients), "clients", clients)
 	}
 
 	// --- Connect to NATS ---
 	nc, err := nats.Connect(cfg.NATSURL)
 	if err != nil {
-		logg.Fatalw("failed to connect to NATS", "error", err)
+		slog.Error("failed to connect to NATS", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Publisher ---
 	pub, err := publisher.New(nc, "evt.capa", "CAPA_EVENTS")
 	if err != nil {
-		logg.Fatalw("failed to init publisher", "error", err)
+		slog.Error("failed to init publisher", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Rate limiter ---
@@ -90,18 +92,18 @@ func main() {
 		MaxConnLifetime:   cfg.PGMaxConnLifetime,
 		MaxConnIdleTime:   cfg.PGMaxConnIdleTime,
 		HealthCheckPeriod: cfg.PGHealthCheckPeriod,
-	}, logg.Desugar())
+	})
 	if err != nil {
-		logg.Fatalw("failed to init store", "error", err)
+		slog.Error("failed to init store", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Legacy trade sync writer ---
-	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, logger.L(), "capa-adapter")
+	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, "capa-adapter")
 
 	// --- RFQ sweeper: expires stale open RFQs and quotes in the legacy DB ---
 	rfqSweeper := legacy.NewRFQSweeper(
 		st.(*store.HybridStore).PG,
-		logger.L(),
 		cfg.RFQSweepInterval,
 		cfg.RFQSweepTTL,
 	)
@@ -109,7 +111,6 @@ func main() {
 
 	// --- Summary refresher: nightly balance materialized view refresh ---
 	refresher := jobs.NewSummaryRefresher(
-		logg.Desugar(),
 		nc,
 		st.(*store.HybridStore).PG,
 		pub,
@@ -118,13 +119,12 @@ func main() {
 	go refresher.Start(ctx)
 
 	// --- Capa HTTP client ---
-	capaClient := capa.NewClient(logg.Desugar(), rateMgr)
+	capaClient := capa.NewClient(rateMgr)
 
 	// --- Capa Service ---
 	capaSvc := capa.NewService(
 		ctx,
 		*cfg,
-		logg.Desugar(),
 		nc,
 		capaClient,
 		resolver,
@@ -135,7 +135,6 @@ func main() {
 
 	// --- Capa Poller ---
 	poller := capa.NewPoller(
-		logg.Desugar(),
 		*cfg,
 		capaSvc,
 		pub,
@@ -147,7 +146,6 @@ func main() {
 
 	// --- Webhook handler ---
 	webhookHandler := capa.NewWebhookHandler(
-		logg.Desugar(),
 		pub,
 		st,
 		poller,
@@ -157,9 +155,10 @@ func main() {
 	)
 
 	// --- NATS command consumer: quote requests and trade execute commands ---
-	cmdConsumer := capa.NewCommandConsumer(nc, capaSvc, logg.Desugar())
+	cmdConsumer := capa.NewCommandConsumer(nc, capaSvc)
 	if err := cmdConsumer.Subscribe(ctx, cfg.InboundSubject, cfg.TradeExecuteSubject); err != nil {
-		logg.Fatalw("failed to subscribe to NATS command subjects", "error", err)
+		slog.Error("failed to subscribe to NATS command subjects", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Fiber HTTP Server ---
@@ -171,30 +170,31 @@ func main() {
 	})
 
 	clientValidator := api.NewResolverValidator(resolver)
-	capaHandler := api.NewCapaHandler(logg.Desugar(), capaSvc, clientValidator)
-	resolveHandler := api.NewOrderResolveHandler(logg.Desugar(), capaSvc, st, tradeSyncWriter)
+	capaHandler := api.NewCapaHandler(capaSvc, clientValidator)
+	resolveHandler := api.NewOrderResolveHandler(capaSvc, st, tradeSyncWriter)
 	productsHandler := api.NewProductsHandler(capaSvc)
-	balanceHandler := api.NewBalanceHandler(st, logg.Desugar())
-	webhookAPIHandler := api.NewWebhookAPIHandler(logg.Desugar(), webhookHandler, st, resolver)
+	balanceHandler := api.NewBalanceHandler(st)
+	webhookAPIHandler := api.NewWebhookAPIHandler(webhookHandler, st, resolver)
 
 	api.RegisterRoutes(app, nc, st, capaHandler, resolveHandler, productsHandler, balanceHandler, webhookAPIHandler)
 
 	// Start HTTP server
 	go func() {
-		logg.Infof("HTTP API listening on :%d", cfg.Port)
+		slog.Info("HTTP API listening", "port", cfg.Port)
 		if err := app.Listen(fmt.Sprintf(":%d", cfg.Port)); err != nil {
-			logg.Fatalw("fiber.listen_failed", "error", err)
+			slog.Error("fiber.listen_failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
-	logg.Infow("[capa-adapter] running",
+	slog.Info("[capa-adapter] running",
 		"nats", cfg.NATSURL,
 		"env", cfg.Env,
 		"poll_interval", cfg.CapaPollInterval,
 		"discovered_clients", len(clients))
 
 	<-ctx.Done()
-	logg.Info("shutting down [capa-adapter]...")
+	slog.Info("shutting down [capa-adapter]...")
 
 	close(stopCleaner)
 	cmdConsumer.Drain()
@@ -202,12 +202,12 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
-		logg.Warnw("fiber.shutdown_failed", "error", err)
+		slog.Warn("fiber.shutdown_failed", "error", err)
 	}
 	if err := nc.Drain(); err != nil {
-		logg.Warnw("nats.drain_failed", "error", err)
+		slog.Warn("nats.drain_failed", "error", err)
 	}
 	if err := st.Close(); err != nil {
-		logg.Warnw("store.close_failed", "error", err)
+		slog.Warn("store.close_failed", "error", err)
 	}
 }

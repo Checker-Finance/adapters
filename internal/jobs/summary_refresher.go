@@ -2,11 +2,11 @@ package jobs
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/nats-io/nats.go"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/publisher"
 )
@@ -14,7 +14,6 @@ import (
 // SummaryRefresher periodically triggers Postgres materialized view refresh
 // and emits a NATS event indicating summary recalculation completion.
 type SummaryRefresher struct {
-	logger    *zap.Logger
 	nc        *nats.Conn
 	db        DBExecutor // small interface wrapper over pgxpool.Pool
 	publisher *publisher.Publisher
@@ -28,9 +27,8 @@ type DBExecutor interface {
 }
 
 // NewSummaryRefresher constructs a background job that runs periodically.
-func NewSummaryRefresher(logger *zap.Logger, nc *nats.Conn, db DBExecutor, pub *publisher.Publisher, interval time.Duration) *SummaryRefresher {
+func NewSummaryRefresher(nc *nats.Conn, db DBExecutor, pub *publisher.Publisher, interval time.Duration) *SummaryRefresher {
 	return &SummaryRefresher{
-		logger:    logger,
 		nc:        nc,
 		db:        db,
 		publisher: pub,
@@ -44,17 +42,17 @@ func (r *SummaryRefresher) Start(ctx context.Context) {
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
 
-	r.logger.Info("summary_refresher.started", zap.Duration("interval", r.interval))
+	slog.Info("summary_refresher.started", "interval", r.interval)
 
 	for {
 		select {
 		case <-ticker.C:
 			r.runOnce(ctx)
 		case <-r.stopCh:
-			r.logger.Info("summary_refresher.stopped (manual stop)")
+			slog.Info("summary_refresher.stopped (manual stop)")
 			return
 		case <-ctx.Done():
-			r.logger.Info("summary_refresher.stopped (context canceled)")
+			slog.Info("summary_refresher.stopped (context canceled)")
 			return
 		}
 	}
@@ -68,11 +66,11 @@ func (r *SummaryRefresher) Stop() {
 // runOnce executes one refresh cycle.
 func (r *SummaryRefresher) runOnce(ctx context.Context) {
 	start := time.Now()
-	r.logger.Info("summary_refresher.running")
+	slog.Info("summary_refresher.running")
 
 	_, err := r.db.Exec(ctx, `SELECT ledger.fn_refresh_balance_summary()`)
 	if err != nil {
-		r.logger.Error("summary_refresher.refresh_failed", zap.Error(err))
+		slog.Error("summary_refresher.refresh_failed", "error", err)
 		return
 	}
 
@@ -83,9 +81,9 @@ func (r *SummaryRefresher) runOnce(ctx context.Context) {
 		"duration_ms": time.Since(start).Milliseconds(),
 	}
 	if err := r.publisher.Publish(ctx, "evt.balance.summary.refreshed.v1", event); err != nil {
-		r.logger.Warn("summary_refresher.nats_publish_failed", zap.Error(err))
+		slog.Warn("summary_refresher.nats_publish_failed", "error", err)
 	}
 
-	r.logger.Info("summary_refresher.success",
-		zap.Duration("duration", time.Since(start)))
+	slog.Info("summary_refresher.success",
+		"duration", time.Since(start))
 }

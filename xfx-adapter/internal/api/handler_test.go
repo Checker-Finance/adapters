@@ -13,7 +13,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/pkg/model"
 )
@@ -53,7 +52,7 @@ func (m *mockClientValidator) IsKnownClient(_ context.Context, clientID string) 
 
 func newTestApp(svc RFQService) *fiber.App {
 	app := fiber.New()
-	handler := NewXFXHandler(zap.NewNop(), svc, nil)
+	handler := NewXFXHandler(svc, nil)
 	v1 := app.Group("/api/v1")
 	v1.Post("/quotes", handler.CreateRFQHandler)
 	v1.Post("/orders", handler.ExecuteRFQHandler)
@@ -62,7 +61,7 @@ func newTestApp(svc RFQService) *fiber.App {
 
 func newTestAppWithValidator(svc RFQService, validator ClientValidator) *fiber.App {
 	app := fiber.New()
-	handler := NewXFXHandler(zap.NewNop(), svc, validator)
+	handler := NewXFXHandler(svc, validator)
 	v1 := app.Group("/api/v1")
 	v1.Post("/quotes", handler.CreateRFQHandler)
 	v1.Post("/orders", handler.ExecuteRFQHandler)

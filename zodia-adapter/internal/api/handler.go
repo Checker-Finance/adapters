@@ -2,9 +2,9 @@ package api
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/pkg/model"
 )
@@ -22,15 +22,13 @@ type ClientValidator interface {
 
 // ZodiaHandler handles HTTP API requests for Zodia RFQ operations.
 type ZodiaHandler struct {
-	logger    *zap.Logger
 	service   RFQService
 	validator ClientValidator
 }
 
 // NewZodiaHandler creates a new ZodiaHandler.
-func NewZodiaHandler(logger *zap.Logger, service RFQService, validator ClientValidator) *ZodiaHandler {
+func NewZodiaHandler(service RFQService, validator ClientValidator) *ZodiaHandler {
 	return &ZodiaHandler{
-		logger:    logger,
 		service:   service,
 		validator: validator,
 	}
@@ -54,9 +52,9 @@ func (h *ZodiaHandler) CreateRFQHandler(c *fiber.Ctx) error {
 
 	quote, err := h.service.CreateRFQ(c.Context(), r)
 	if err != nil {
-		h.logger.Error("zodia.create_rfq.failed",
-			zap.String("client", req.ClientID),
-			zap.Error(err))
+		slog.Error("zodia.create_rfq.failed",
+			"client", req.ClientID,
+			"error", err)
 		return c.Status(fiber.StatusBadRequest).JSON(RFQResponse{
 			QuoteID:  req.ID,
 			ErrorMsg: err.Error(),
@@ -90,16 +88,16 @@ func (h *ZodiaHandler) ExecuteRFQHandler(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "quoteId is required"})
 	}
 
-	h.logger.Info("zodia.execute_rfq",
-		zap.String("client", req.ClientID),
-		zap.String("quote_id", quoteID))
+	slog.Info("zodia.execute_rfq",
+		"client", req.ClientID,
+		"quote_id", quoteID)
 
 	trade, err := h.service.ExecuteRFQ(c.Context(), req.ClientID, quoteID)
 	if err != nil {
-		h.logger.Error("zodia.execute_rfq.failed",
-			zap.String("client", req.ClientID),
-			zap.String("quote_id", quoteID),
-			zap.Error(err))
+		slog.Error("zodia.execute_rfq.failed",
+			"client", req.ClientID,
+			"quote_id", quoteID,
+			"error", err)
 		return c.Status(fiber.StatusBadRequest).JSON(RFQExecutionResponse{
 			OrderID:  req.OrderID,
 			ErrorMsg: err.Error(),

@@ -18,7 +18,6 @@ type XFXClientConfig struct {
 	Auth0Audience string // Auth0 API audience identifier
 }
 
-
 // ConfigResolver resolves per-client XFX configuration.
 type ConfigResolver interface {
 	// Resolve fetches the XFXClientConfig for a given client ID, using cache when available.
@@ -57,10 +56,10 @@ type Auth0TokenResponse struct {
 
 // XFXQuoteRequest is the payload for POST /v1/customer/quotes.
 type XFXQuoteRequest struct {
-	Symbol            string  `json:"symbol"`                      // e.g. "USD/MXN"
-	Side              string  `json:"side"`                        // "BUY" or "SELL"
-	Quantity          float64 `json:"quantity"`                    // Amount in base currency
-	CustomerAccountID int     `json:"customerAccountId,omitempty"` // Optional account ID
+	Symbol            string            `json:"symbol"`                      // e.g. "USD/MXN"
+	Side              string            `json:"side"`                        // "BUY" or "SELL"
+	Quantity          float64           `json:"quantity"`                    // Amount in base currency
+	CustomerAccountID int               `json:"customerAccountId,omitempty"` // Optional account ID
 	Metadata          *XFXQuoteMetadata `json:"metadata,omitempty"`
 }
 
@@ -71,10 +70,10 @@ type XFXQuoteMetadata struct {
 
 // XFXQuoteResponse is the response from POST /v1/customer/quotes or GET /v1/customer/quotes/{id}.
 type XFXQuoteResponse struct {
-	Success       bool     `json:"success"`
-	Quote         XFXQuote `json:"quote"`
-	PayoutAccountID string `json:"payoutAccountId,omitempty"`
-	Message       string   `json:"message,omitempty"`
+	Success         bool     `json:"success"`
+	Quote           XFXQuote `json:"quote"`
+	PayoutAccountID string   `json:"payoutAccountId,omitempty"`
+	Message         string   `json:"message,omitempty"`
 }
 
 // XFXQuote contains the quote details.
@@ -147,9 +146,9 @@ type XFXListTransactionsResponse struct {
 
 // XFXErrorResponse represents an error response from the XFX API.
 type XFXErrorResponse struct {
-	Success bool      `json:"success"`
-	Error   XFXError  `json:"error,omitempty"`
-	Message string    `json:"message,omitempty"`
+	Success bool     `json:"success"`
+	Error   XFXError `json:"error,omitempty"`
+	Message string   `json:"message,omitempty"`
 }
 
 // XFXError holds the structured error detail.

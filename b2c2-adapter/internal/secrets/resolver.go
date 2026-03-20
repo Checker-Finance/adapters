@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"go.uber.org/zap"
-
 	"github.com/Checker-Finance/adapters/b2c2-adapter/internal/b2c2"
 	"github.com/Checker-Finance/adapters/b2c2-adapter/pkg/config"
 	intsecrets "github.com/Checker-Finance/adapters/internal/secrets"
@@ -24,12 +22,11 @@ type AWSResolver struct {
 
 // NewAWSResolver constructs a B2C2-specific config resolver.
 func NewAWSResolver(
-	logger *zap.Logger,
 	cfg *config.Config,
 	provider pkgsecrets.Provider,
 	cache *pkgsecrets.Cache[b2c2.B2C2ClientConfig],
 ) *AWSResolver {
-	inner := intsecrets.NewAWSResolver(logger, cfg.Env, "b2c2", provider, cache)
+	inner := intsecrets.NewAWSResolver(cfg.Env, "b2c2", provider, cache)
 	return &AWSResolver{inner: inner, cfg: cfg}
 }
 

@@ -5,10 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/rate"
 )
@@ -27,7 +26,6 @@ func Backoff(attempt int) time.Duration {
 
 // Executor handles rate-limited, retrying HTTP execution with JSON decoding.
 type Executor struct {
-	logger       *zap.Logger
 	rateMgr      *rate.Manager
 	http         *http.Client
 	retryMax     int
@@ -38,7 +36,6 @@ type Executor struct {
 // New creates an Executor. errorHandler is called on 4xx failure responses to produce a
 // venue-specific error. If nil, a default error is returned.
 func New(
-	logger *zap.Logger,
 	rateMgr *rate.Manager,
 	httpClient *http.Client,
 	retryMax int,
@@ -46,7 +43,6 @@ func New(
 	errorHandler func(status int, body []byte) error,
 ) *Executor {
 	return &Executor{
-		logger:       logger,
 		rateMgr:      rateMgr,
 		http:         httpClient,
 		retryMax:     retryMax,
@@ -80,10 +76,10 @@ func (e *Executor) DoJSON(ctx context.Context, req *http.Request, rateLimitKey s
 		resp, err := e.http.Do(req)
 		if err != nil {
 			lastErr = err
-			e.logger.Warn(e.venueTag+".http_failed",
-				zap.String("url", req.URL.String()),
-				zap.Error(err),
-				zap.Int("attempt", attempt))
+			slog.Warn(e.venueTag+".http_failed",
+				"url", req.URL.String(),
+				"error", err,
+				"attempt", attempt)
 			time.Sleep(Backoff(attempt))
 			continue
 		}
@@ -93,10 +89,10 @@ func (e *Executor) DoJSON(ctx context.Context, req *http.Request, rateLimitKey s
 		elapsed := time.Since(start)
 
 		if resp.StatusCode >= 500 {
-			e.logger.Warn(e.venueTag+".server_error",
-				zap.Int("status", resp.StatusCode),
-				zap.String("url", req.URL.String()),
-				zap.Duration("latency", elapsed))
+			slog.Warn(e.venueTag+".server_error",
+				"status", resp.StatusCode,
+				"url", req.URL.String(),
+				"latency", elapsed)
 			lastErr = fmt.Errorf("%s server error: %d", e.venueTag, resp.StatusCode)
 			time.Sleep(Backoff(attempt))
 			continue
@@ -111,18 +107,18 @@ func (e *Executor) DoJSON(ctx context.Context, req *http.Request, rateLimitKey s
 
 		if out != nil && len(body) > 0 {
 			if err := json.Unmarshal(body, out); err != nil {
-				e.logger.Warn(e.venueTag+".decode_failed",
-					zap.Error(err),
-					zap.String("url", req.URL.String()),
-					zap.String("body", string(body)))
+				slog.Warn(e.venueTag+".decode_failed",
+					"error", err,
+					"url", req.URL.String(),
+					"body", string(body))
 				return fmt.Errorf("decode failed: %w", err)
 			}
 		}
 
-		e.logger.Debug(e.venueTag+".http_success",
-			zap.String("url", req.URL.String()),
-			zap.Int("status", resp.StatusCode),
-			zap.Duration("elapsed", elapsed))
+		slog.Debug(e.venueTag+".http_success",
+			"url", req.URL.String(),
+			"status", resp.StatusCode,
+			"elapsed", elapsed)
 
 		return nil
 	}

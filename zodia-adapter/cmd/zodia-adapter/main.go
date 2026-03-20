@@ -3,24 +3,25 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/Checker-Finance/adapters/zodia-adapter/internal/api"
 	"github.com/Checker-Finance/adapters/internal/jobs"
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/internal/rate"
-	"github.com/Checker-Finance/adapters/zodia-adapter/internal/zodia"
-	internalsecrets "github.com/Checker-Finance/adapters/zodia-adapter/internal/secrets"
 	"github.com/Checker-Finance/adapters/internal/store"
-	"github.com/Checker-Finance/adapters/zodia-adapter/pkg/config"
 	"github.com/Checker-Finance/adapters/pkg/logger"
 	"github.com/Checker-Finance/adapters/pkg/secrets"
 	"github.com/Checker-Finance/adapters/pkg/utils"
+	"github.com/Checker-Finance/adapters/zodia-adapter/internal/api"
+	internalsecrets "github.com/Checker-Finance/adapters/zodia-adapter/internal/secrets"
+	"github.com/Checker-Finance/adapters/zodia-adapter/internal/zodia"
+	"github.com/Checker-Finance/adapters/zodia-adapter/pkg/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/nats-io/nats.go"
 )
@@ -35,14 +36,14 @@ func main() {
 	cfg.Venue = "zodia"
 
 	logger.Init(cfg.ServiceName, cfg.Env, cfg.LogLevel)
-	logg := logger.S()
-	logg.Info("starting [zodia-adapter]...")
-	logg.Info("connection to DSN: ", utils.MaskDSN(cfg.DatabaseURL))
+	slog.Info("starting [zodia-adapter]...")
+	slog.Info("connection to DSN", "dsn", utils.MaskDSN(cfg.DatabaseURL))
 
 	// --- AWS Secrets Manager provider ---
 	awsProvider, err := secrets.NewAWSProvider(cfg.AWSRegion)
 	if err != nil {
-		logg.Fatalw("failed to create AWS Secrets Manager provider", "error", err)
+		slog.Error("failed to create AWS Secrets Manager provider", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Per-client config resolver (secrets cached in-memory) ---
@@ -51,7 +52,6 @@ func main() {
 	go configCache.StartCleaner(cfg.CleanupFreq, stopCleaner)
 
 	resolver := internalsecrets.NewAWSResolver(
-		logg.Desugar(),
 		*cfg,
 		awsProvider,
 		configCache,
@@ -60,21 +60,23 @@ func main() {
 	// --- Discover configured clients ---
 	clients, err := resolver.DiscoverClients(ctx)
 	if err != nil {
-		logg.Warnw("failed to discover clients from AWS Secrets Manager", "error", err)
+		slog.Warn("failed to discover clients from AWS Secrets Manager", "error", err)
 	} else {
-		logg.Infow("discovered Zodia clients", "count", len(clients), "clients", clients)
+		slog.Info("discovered Zodia clients", "count", len(clients), "clients", clients)
 	}
 
 	// --- Connect to NATS ---
 	nc, err := nats.Connect(cfg.NATSURL)
 	if err != nil {
-		logg.Fatalw("failed to connect to NATS", "error", err)
+		slog.Error("failed to connect to NATS", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Publisher ---
 	pub, err := publisher.New(nc, "evt.zodia", "ZODIA_EVENTS")
 	if err != nil {
-		logg.Fatalw("failed to init publisher", "error", err)
+		slog.Error("failed to init publisher", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Rate limiter (30 req/s for Zodia REST API) ---
@@ -91,18 +93,18 @@ func main() {
 		MaxConnLifetime:   cfg.PGMaxConnLifetime,
 		MaxConnIdleTime:   cfg.PGMaxConnIdleTime,
 		HealthCheckPeriod: cfg.PGHealthCheckPeriod,
-	}, logg.Desugar())
+	})
 	if err != nil {
-		logg.Fatalw("failed to init store", "error", err)
+		slog.Error("failed to init store", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Legacy trade sync writer ---
-	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, logger.L(), "zodia-adapter")
+	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, "zodia-adapter")
 
 	// --- RFQ sweeper: expires stale open RFQs and quotes in the legacy DB ---
 	rfqSweeper := legacy.NewRFQSweeper(
 		st.(*store.HybridStore).PG,
-		logger.L(),
 		cfg.RFQSweepInterval,
 		cfg.RFQSweepTTL,
 	)
@@ -110,7 +112,6 @@ func main() {
 
 	// --- Summary refresher: nightly balance materialized view refresh ---
 	refresher := jobs.NewSummaryRefresher(
-		logg.Desugar(),
 		nc,
 		st.(*store.HybridStore).PG,
 		pub,
@@ -120,16 +121,15 @@ func main() {
 
 	// --- Zodia REST + WS Auth components ---
 	signer := zodia.NewHMACSigner()
-	restClient := zodia.NewRESTClient(logg.Desugar(), rateMgr, signer)
-	wsTokenMgr := zodia.NewWSTokenManager(logg.Desugar(), restClient)
-	wsClient := zodia.NewWSClient(logg.Desugar())
-	sessionMgr := zodia.NewSessionManager(logg.Desugar(), wsClient, wsTokenMgr, cfg.WSMaxRetries)
+	restClient := zodia.NewRESTClient(rateMgr, signer)
+	wsTokenMgr := zodia.NewWSTokenManager(restClient)
+	wsClient := zodia.NewWSClient()
+	sessionMgr := zodia.NewSessionManager(wsClient, wsTokenMgr, cfg.WSMaxRetries)
 
 	// --- Zodia Service ---
 	zodiaSvc := zodia.NewService(
 		ctx,
 		*cfg,
-		logg.Desugar(),
 		nc,
 		restClient,
 		sessionMgr,
@@ -141,7 +141,6 @@ func main() {
 
 	// --- Zodia Poller ---
 	poller := zodia.NewPoller(
-		logg.Desugar(),
 		*cfg,
 		zodiaSvc,
 		pub,
@@ -152,9 +151,10 @@ func main() {
 	zodiaSvc.SetPoller(poller)
 
 	// --- NATS command consumer: quote requests and trade execute commands ---
-	cmdConsumer := zodia.NewCommandConsumer(nc, zodiaSvc, logg.Desugar())
+	cmdConsumer := zodia.NewCommandConsumer(nc, zodiaSvc)
 	if err := cmdConsumer.Subscribe(ctx, cfg.InboundSubject, cfg.TradeExecuteSubject); err != nil {
-		logg.Fatalw("failed to subscribe to NATS command subjects", "error", err)
+		slog.Error("failed to subscribe to NATS command subjects", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Balance poller: periodic account balance sync ---
@@ -162,7 +162,7 @@ func main() {
 	if len(balanceClients) > 0 {
 		go poller.StartBalancePolling(ctx, balanceClients)
 	} else {
-		logg.Warn("no CLIENT_BALANCE_IDS configured; skipping balance polling")
+		slog.Warn("no CLIENT_BALANCE_IDS configured; skipping balance polling")
 	}
 
 	// --- Fiber HTTP Server ---
@@ -174,31 +174,32 @@ func main() {
 	})
 
 	clientValidator := api.NewResolverValidator(resolver)
-	zodiaHandler := api.NewZodiaHandler(logg.Desugar(), zodiaSvc, clientValidator)
-	resolveHandler := api.NewOrderResolveHandler(logg.Desugar(), zodiaSvc, st, tradeSyncWriter)
-	balanceHandler := api.NewBalanceHandler(logg.Desugar(), st)
+	zodiaHandler := api.NewZodiaHandler(zodiaSvc, clientValidator)
+	resolveHandler := api.NewOrderResolveHandler(zodiaSvc, st, tradeSyncWriter)
+	balanceHandler := api.NewBalanceHandler(st)
 	productsHandler := api.NewProductsHandler(zodiaSvc)
 	mapper := zodia.NewMapper()
-	webhookHandler := api.NewWebhookHandler(logg.Desugar(), st, mapper, tradeSyncWriter, pub)
+	webhookHandler := api.NewWebhookHandler(st, mapper, tradeSyncWriter, pub)
 
 	api.RegisterRoutes(app, nc, st, zodiaHandler, resolveHandler, balanceHandler, productsHandler, webhookHandler)
 
 	// Start HTTP server
 	go func() {
-		logg.Infof("HTTP API listening on :%d", cfg.Port)
+		slog.Info("HTTP API listening", "port", cfg.Port)
 		if err := app.Listen(fmt.Sprintf(":%d", cfg.Port)); err != nil {
-			logg.Fatalw("fiber.listen_failed", "error", err)
+			slog.Error("fiber.listen_failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
-	logg.Infow("[zodia-adapter] running",
+	slog.Info("[zodia-adapter] running",
 		"nats", cfg.NATSURL,
 		"env", cfg.Env,
 		"poll_interval", cfg.ZodiaPollInterval,
 		"discovered_clients", len(clients))
 
 	<-ctx.Done()
-	logg.Info("shutting down [zodia-adapter]...")
+	slog.Info("shutting down [zodia-adapter]...")
 
 	close(stopCleaner)
 	cmdConsumer.Drain()
@@ -207,13 +208,13 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
-		logg.Warnw("fiber.shutdown_failed", "error", err)
+		slog.Warn("fiber.shutdown_failed", "error", err)
 	}
 	if err := nc.Drain(); err != nil {
-		logg.Warnw("nats.drain_failed", "error", err)
+		slog.Warn("nats.drain_failed", "error", err)
 	}
 	if err := st.Close(); err != nil {
-		logg.Warnw("store.close_failed", "error", err)
+		slog.Warn("store.close_failed", "error", err)
 	}
 }
 

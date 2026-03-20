@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -15,15 +16,14 @@ import (
 	"github.com/Checker-Finance/adapters/pkg/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/nats-io/nats.go"
-	_ "go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/auth"
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/braza"
+	intsecrets "github.com/Checker-Finance/adapters/braza-adapter/internal/secrets"
+	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
 	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/internal/rate"
-	intsecrets "github.com/Checker-Finance/adapters/braza-adapter/internal/secrets"
 	"github.com/Checker-Finance/adapters/internal/store"
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
 	"github.com/Checker-Finance/adapters/pkg/logger"
 	pkgsecrets "github.com/Checker-Finance/adapters/pkg/secrets"
 )
@@ -35,13 +35,13 @@ func main() {
 	cfg := config.Load(ctx)
 
 	logger.Init(cfg.ServiceName, cfg.Env, cfg.LogLevel)
-	logg := logger.S()
-	logg.Info("starting [braza-adapter]...")
-	logg.Info("connection to DSN: ", utils.MaskDSN(cfg.DatabaseURL))
+	slog.Info("starting [braza-adapter]...")
+	slog.Info("connection to DSN", "dsn", utils.MaskDSN(cfg.DatabaseURL))
 	// --- Connect to NATS ---
 	nc, err := nats.Connect(cfg.NATSURL)
 	if err != nil {
-		logg.Fatalw("failed to connect to NATS", "error", err)
+		slog.Error("failed to connect to NATS", "error", err)
+		os.Exit(1)
 	}
 	defer nc.Drain() //nolint:errcheck
 
@@ -52,12 +52,12 @@ func main() {
 	// --- AWS Secrets Manager provider ---
 	awsProvider, err := pkgsecrets.NewAWSProvider(cfg.AWSRegion)
 	if err != nil {
-		logg.Fatalw("failed to init AWS provider", "error", err)
+		slog.Error("failed to init AWS provider", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Internal secrets resolver (multi-tenant) ---
 	resolver := intsecrets.NewAWSResolver(
-		logg.Desugar(),
 		cfg.Env,
 		awsProvider,
 		cache,
@@ -65,13 +65,14 @@ func main() {
 
 	// --- Auth Manager (handles Braza JWTs) ---
 	authMgr := auth.NewManager(
-		awsProvider, cacheAdapter, logg.Desugar(), cfg.BrazaBaseURL,
+		awsProvider, cacheAdapter, cfg.BrazaBaseURL,
 	)
 
 	// --- Publisher ---
 	pub, err := publisher.New(nc, "evt.braza", "BRAZA_EVENTS")
 	if err != nil {
-		logg.Fatalw("failed to init publisher", "error", err)
+		slog.Error("failed to init publisher", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Rate limiter ---
@@ -82,28 +83,27 @@ func main() {
 	})
 
 	// --- Store (Redis + Postgres hybrid) ---
-	st, err := store.NewHybrid(cfg.RedisURL, cfg.DatabaseURL, store.PGPoolConfig{}, logg.Desugar())
+	st, err := store.NewHybrid(cfg.RedisURL, cfg.DatabaseURL, store.PGPoolConfig{})
 	if err != nil {
-		logg.Fatalw("failed to init store", "error", err)
+		slog.Error("failed to init store", "error", err)
+		os.Exit(1)
 	}
 	defer st.Close() //nolint:errcheck
 
-	productResolver := braza.NewProductResolver(cfg.BrazaBaseURL, logger.L())
+	productResolver := braza.NewProductResolver(cfg.BrazaBaseURL)
 
 	rfqSweeper := legacy.NewRFQSweeper(
 		st.(*store.HybridStore).PG,
-		logger.L(),
 		5*time.Minute,  // sweep interval
 		15*time.Minute, // RFQ TTL
 	)
 	go rfqSweeper.Start(ctx)
 
-	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, logger.L(), "braza-adapter")
+	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, "braza-adapter")
 	// --- Braza service (core adapter logic) ---
 	brazaSvc := braza.NewService(
 		ctx,
 		*cfg,
-		logg.Desugar(),
 		nc,
 		cfg.BrazaBaseURL,
 		authMgr,
@@ -117,7 +117,6 @@ func main() {
 
 	app := fiber.New()
 	h := &api.Handler{
-		Logger:  logg.Desugar(),
 		Service: brazaSvc,
 		Store:   st,
 	}
@@ -125,7 +124,6 @@ func main() {
 	ph := api.NewProductsHandler(brazaSvc, cfg)
 
 	oh := &api.OrderResolveHandler{
-		Logger:    logg.Desugar(),
 		Service:   brazaSvc,
 		Store:     st,
 		TradeSync: tradeSyncWriter,
@@ -134,15 +132,15 @@ func main() {
 	api.RegisterRoutes(app, nc, st, h, ph, oh)
 
 	go func() {
-		logg.Infof("HTTP API listening on :%d", cfg.Port)
+		slog.Info("HTTP API listening", "port", cfg.Port)
 		if err := app.Listen(fmt.Sprintf(":%d", cfg.Port)); err != nil {
-			logg.Fatalw("fiber.listen_failed", "error", err)
+			slog.Error("fiber.listen_failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
 	// --- Create Poller (handles balances + trade tracking) ---
 	poller := braza.NewPoller(
-		logg.Desugar(),
 		*cfg,
 		brazaSvc,
 		pub,
@@ -157,7 +155,6 @@ func main() {
 	brazaSvc.SetPoller(poller)
 
 	refresher := jobs.NewSummaryRefresher(
-		logg.Desugar(),
 		nc,
 		st.(*store.HybridStore).PG, // expose DB handle
 		pub,
@@ -169,20 +166,20 @@ func main() {
 	// --- Define tenants/clients/desks ---
 	clientsBalances := parseClientIDs(cfg.ClientBalancesIDs)
 	if len(clientsBalances) == 0 {
-		logg.Warn("no client IDs configured; skipping balance poller startup")
+		slog.Warn("no client IDs configured; skipping balance poller startup")
 	} else {
 		// --- Start periodic poller ---
 		go poller.Start(ctx, clientsBalances)
 	}
 
 	// --- Main process stays alive until interrupted ---
-	logg.Infow("[braza-adapter] running",
+	slog.Info("[braza-adapter] running",
 		"nats", cfg.NATSURL,
 		"poll_interval", cfg.PollInterval)
 
 	<-ctx.Done()
 	stop()
-	logg.Info("shutting down [braza-adapter]...")
+	slog.Info("shutting down [braza-adapter]...")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -2,11 +2,10 @@ package zodia
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
@@ -18,7 +17,6 @@ import (
 // Poller continuously checks Zodia transaction status for active trades,
 // and periodically polls account balances.
 type Poller struct {
-	logger       *zap.Logger
 	cfg          config.Config
 	service      *Service
 	publisher    *publisher.Publisher
@@ -31,7 +29,6 @@ type Poller struct {
 
 // NewPoller constructs a new Zodia poller.
 func NewPoller(
-	logger *zap.Logger,
 	cfg config.Config,
 	service *Service,
 	pub *publisher.Publisher,
@@ -40,7 +37,6 @@ func NewPoller(
 	tradeSync *legacy.TradeSyncWriter,
 ) *Poller {
 	return &Poller{
-		logger:       logger,
 		cfg:          cfg,
 		service:      service,
 		publisher:    pub,
@@ -66,9 +62,9 @@ func (p *Poller) PollTradeStatus(
 ) {
 	// Prevent duplicate polling for the same trade
 	if _, exists := p.activeTrades.Load(tradeID); exists {
-		p.logger.Debug("zodia.trade_poll_already_active",
-			zap.String("trade_id", tradeID),
-			zap.String("client", clientID),
+		slog.Debug("zodia.trade_poll_already_active",
+			"trade_id", tradeID,
+			"client", clientID,
 		)
 		return
 	}
@@ -90,25 +86,25 @@ func (p *Poller) PollTradeStatus(
 		for {
 			select {
 			case <-ctx.Done():
-				p.logger.Info("zodia.trade_poll_stopped",
-					zap.String("trade_id", tradeID),
-					zap.String("client", clientID),
-					zap.String("last_status", lastStatus))
+				slog.Info("zodia.trade_poll_stopped",
+					"trade_id", tradeID,
+					"client", clientID,
+					"last_status", lastStatus)
 				return
 
 			case <-p.stopCh:
-				p.logger.Info("zodia.trade_poll_stopped",
-					zap.String("trade_id", tradeID),
-					zap.String("reason", "poller_shutdown"))
+				slog.Info("zodia.trade_poll_stopped",
+					"trade_id", tradeID,
+					"reason", "poller_shutdown")
 				return
 
 			case <-ticker.C:
 				tx, err := p.service.FetchTransactionStatus(ctx, clientID, tradeID)
 				if err != nil {
-					p.logger.Warn("zodia.trade_poll_error",
-						zap.String("trade_id", tradeID),
-						zap.String("client", clientID),
-						zap.Error(err))
+					slog.Warn("zodia.trade_poll_error",
+						"trade_id", tradeID,
+						"client", clientID,
+						"error", err)
 					continue
 				}
 
@@ -131,17 +127,17 @@ func (p *Poller) PollTradeStatus(
 						subject := "evt.trade.status_changed.v1.ZODIA"
 						if err := p.publisher.Publish(ctx, subject, event); err != nil {
 							metrics.IncNATSPublishError(subject)
-							p.logger.Debug("nats.publish_failed",
-								zap.String("subject", subject),
-								zap.Error(err))
+							slog.Debug("nats.publish_failed",
+								"subject", subject,
+								"error", err)
 						}
 					}
 
-					p.logger.Info("zodia.trade_status_changed",
-						zap.String("trade_id", tradeID),
-						zap.String("client", clientID),
-						zap.String("raw_state", rawState),
-						zap.String("normalized_status", status))
+					slog.Info("zodia.trade_status_changed",
+						"trade_id", tradeID,
+						"client", clientID,
+						"raw_state", rawState,
+						"normalized_status", status)
 				}
 
 				if IsTerminalState(rawState) {
@@ -158,7 +154,7 @@ func (p *Poller) StartBalancePolling(ctx context.Context, clients []string) {
 	if len(clients) == 0 {
 		return
 	}
-	p.logger.Info("zodia.balance_polling_started", zap.Int("clients", len(clients)))
+	slog.Info("zodia.balance_polling_started", "clients", len(clients))
 
 	for _, client := range clients {
 		if client == "" {
@@ -180,10 +176,10 @@ func (p *Poller) StartBalancePolling(ctx context.Context, clients []string) {
 				go p.pollBalancesOnce(ctx, client)
 			}
 		case <-ctx.Done():
-			p.logger.Info("zodia.balance_polling_stopped", zap.String("reason", "context_done"))
+			slog.Info("zodia.balance_polling_stopped", "reason", "context_done")
 			return
 		case <-p.stopCh:
-			p.logger.Info("zodia.balance_polling_stopped", zap.String("reason", "poller_shutdown"))
+			slog.Info("zodia.balance_polling_stopped", "reason", "poller_shutdown")
 			return
 		}
 	}
@@ -192,9 +188,9 @@ func (p *Poller) StartBalancePolling(ctx context.Context, clients []string) {
 // pollBalancesOnce executes one balance poll cycle for a single client.
 func (p *Poller) pollBalancesOnce(ctx context.Context, clientID string) {
 	if err := p.service.FetchAndPublishBalances(ctx, clientID); err != nil {
-		p.logger.Warn("zodia.balance_poll_failed",
-			zap.String("client", clientID),
-			zap.Error(err))
+		slog.Warn("zodia.balance_poll_failed",
+			"client", clientID,
+			"error", err)
 	}
 }
 
@@ -212,16 +208,16 @@ func (p *Poller) handleTerminalState(
 		trade := p.service.BuildTradeConfirmationFromTransaction(clientID, tx)
 		if trade != nil {
 			if err := p.tradeSync.SyncTradeUpsert(ctx, trade); err != nil {
-				p.logger.Warn("legacy.trade_sync_failed",
-					zap.String("trade_id", tradeID),
-					zap.String("client", clientID),
-					zap.Error(err))
+				slog.Warn("legacy.trade_sync_failed",
+					"trade_id", tradeID,
+					"client", clientID,
+					"error", err)
 			} else {
-				p.logger.Info("legacy.trade_sync_upsert",
-					zap.String("trade_id", tradeID),
-					zap.String("client", clientID),
-					zap.String("status", trade.Status),
-					zap.String("venue", trade.Venue))
+				slog.Info("legacy.trade_sync_upsert",
+					"trade_id", tradeID,
+					"client", clientID,
+					"status", trade.Status,
+					"venue", trade.Venue)
 			}
 		}
 	}
@@ -238,14 +234,14 @@ func (p *Poller) handleTerminalState(
 			"timestamp": time.Now().UTC(),
 		}); err != nil {
 			metrics.IncNATSPublishError(finalSubject)
-			p.logger.Debug("nats.publish_failed",
-				zap.String("subject", finalSubject),
-				zap.Error(err))
+			slog.Debug("nats.publish_failed",
+				"subject", finalSubject,
+				"error", err)
 		}
 	}
 
-	p.logger.Info("zodia.trade_poll_complete",
-		zap.String("trade_id", tradeID),
-		zap.String("client", clientID),
-		zap.String("final_status", status))
+	slog.Info("zodia.trade_poll_complete",
+		"trade_id", tradeID,
+		"client", clientID,
+		"final_status", status)
 }

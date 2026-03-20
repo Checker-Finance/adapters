@@ -3,10 +3,10 @@ package publisher
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"time"
 
 	"github.com/Checker-Finance/adapters/internal/metrics"
-	"github.com/Checker-Finance/adapters/pkg/logger"
 	"github.com/Checker-Finance/adapters/pkg/model"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
@@ -38,7 +38,7 @@ func New(nc *nats.Conn, subject, service string) (*Publisher, error) {
 func (p *Publisher) PublishEnvelope(ctx context.Context, subject string, env *model.Envelope) error {
 	data, err := json.Marshal(env)
 	if err != nil {
-		logger.S().Errorw("publisher.marshal_failed",
+		slog.Error("publisher.marshal_failed",
 			"subject", subject,
 			"event_type", env.EventType,
 			"error", err,
@@ -69,7 +69,7 @@ func (p *Publisher) PublishEnvelope(ctx context.Context, subject string, env *mo
 	metrics.ObserveDuration(metrics.NATSMessageLatency, start, subject)
 
 	if err != nil {
-		logger.S().Errorw("publisher.publish_failed",
+		slog.Error("publisher.publish_failed",
 			"subject", subject,
 			"event_type", env.EventType,
 			"client_id", env.ClientID,
@@ -79,7 +79,7 @@ func (p *Publisher) PublishEnvelope(ctx context.Context, subject string, env *mo
 		return err
 	}
 
-	logger.S().Infow("publisher.publish_success",
+	slog.Info("publisher.publish_success",
 		"subject", subject,
 		"event_type", env.EventType,
 		"client_id", env.ClientID,

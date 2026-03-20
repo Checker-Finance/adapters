@@ -5,36 +5,34 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
-	"go.uber.org/zap"
-
+	"github.com/Checker-Finance/adapters/capa-adapter/internal/metrics"
 	"github.com/Checker-Finance/adapters/internal/httpclient"
 	"github.com/Checker-Finance/adapters/internal/rate"
-	"github.com/Checker-Finance/adapters/capa-adapter/internal/metrics"
 )
 
 // Client wraps low-level HTTP communication with the Capa API.
 // A single Client instance can serve multiple tenants; credentials are
 // supplied per-request via CapaClientConfig.
 type Client struct {
-	logger *zap.Logger
-	exec   *httpclient.Executor
+	exec *httpclient.Executor
 }
 
 // NewClient constructs a new Capa HTTP client with rate limiting and retries.
-func NewClient(logger *zap.Logger, rateMgr *rate.Manager) *Client {
+func NewClient(rateMgr *rate.Manager) *Client {
 	httpClient := &http.Client{Timeout: 30 * time.Second}
-	exec := httpclient.New(logger, rateMgr, httpClient, 2, "capa", func(status int, body []byte) error {
+	exec := httpclient.New(rateMgr, httpClient, 2, "capa", func(status int, body []byte) error {
 		var errResp CapaErrorResponse
 		_ = json.Unmarshal(body, &errResp)
 
-		logger.Warn("capa.client_error",
-			zap.Int("status", status),
-			zap.String("code", errResp.Code),
-			zap.String("message", errResp.Message),
-			zap.String("body", string(body)))
+		slog.Warn("capa.client_error",
+			"status", status,
+			"code", errResp.Code,
+			"message", errResp.Message,
+			"body", string(body))
 
 		msg := errResp.Message
 		if msg == "" {
@@ -46,8 +44,7 @@ func NewClient(logger *zap.Logger, rateMgr *rate.Manager) *Client {
 		return fmt.Errorf("capa returned %d: %s", status, msg)
 	})
 	return &Client{
-		logger: logger,
-		exec:   exec,
+		exec: exec,
 	}
 }
 

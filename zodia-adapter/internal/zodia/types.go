@@ -226,16 +226,16 @@ type WSErrorPayload struct {
 // Zodia sends these for transaction state changes.
 // ⚠️ Exact field names need verification against webhook docs.
 type ZodiaWebhookEvent struct {
-	UUID         string  `json:"uuid"`             // unique event identifier (use for dedup)
-	Type         string  `json:"type"`             // "OTCTRADE", "RFSTRADE"
-	State        string  `json:"state"`            // "PENDING", "PROCESSED"
-	TradeID      string  `json:"tradeId"`          // Zodia trade identifier
-	Instrument   string  `json:"instrument"`       // e.g. "USD.MXN"
-	Side         string  `json:"side"`             // "BUY", "SELL"
-	Quantity     float64 `json:"quantity"`         // amount in base currency
-	Price        float64 `json:"price"`            // execution price
-	DealtAmount  float64 `json:"dealtAmount"`      // dealt amount
-	ContraAmount float64 `json:"contraAmount"`     // contra amount
-	CreatedAt    string  `json:"createdAt"`        // RFC3339
-	UpdatedAt    string  `json:"updatedAt"`        // RFC3339
+	UUID         string  `json:"uuid"`         // unique event identifier (use for dedup)
+	Type         string  `json:"type"`         // "OTCTRADE", "RFSTRADE"
+	State        string  `json:"state"`        // "PENDING", "PROCESSED"
+	TradeID      string  `json:"tradeId"`      // Zodia trade identifier
+	Instrument   string  `json:"instrument"`   // e.g. "USD.MXN"
+	Side         string  `json:"side"`         // "BUY", "SELL"
+	Quantity     float64 `json:"quantity"`     // amount in base currency
+	Price        float64 `json:"price"`        // execution price
+	DealtAmount  float64 `json:"dealtAmount"`  // dealt amount
+	ContraAmount float64 `json:"contraAmount"` // contra amount
+	CreatedAt    string  `json:"createdAt"`    // RFC3339
+	UpdatedAt    string  `json:"updatedAt"`    // RFC3339
 }

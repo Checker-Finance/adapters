@@ -9,13 +9,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // helper: build a RESTClient pointing at the given test server URL via cfg.BaseURL.
 func newTestRESTClient(t *testing.T) *RESTClient {
 	t.Helper()
-	return NewRESTClient(zap.NewNop(), nil, NewHMACSigner())
+	return NewRESTClient(nil, NewHMACSigner())
 }
 
 func testCfgFor(serverURL string) *ZodiaClientConfig {
@@ -232,7 +231,7 @@ func TestRESTClient_HMACHeaders_CorrectValues(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewRESTClient(zap.NewNop(), nil, signer)
+	client := NewRESTClient(nil, signer)
 	_, _ = client.GetAccounts(t.Context(), testCfgFor(srv.URL))
 	assert.Equal(t, "test-api-key", capturedKey)
 	assert.NotEmpty(t, capturedSign)

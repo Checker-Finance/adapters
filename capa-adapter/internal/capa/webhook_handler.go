@@ -5,10 +5,9 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"log/slog"
 	"strings"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
@@ -17,7 +16,6 @@ import (
 
 // WebhookHandler handles incoming webhook events from Capa.
 type WebhookHandler struct {
-	logger    *zap.Logger
 	publisher *publisher.Publisher
 	store     store.Store
 	poller    *Poller
@@ -28,7 +26,6 @@ type WebhookHandler struct {
 
 // NewWebhookHandler creates a new WebhookHandler.
 func NewWebhookHandler(
-	logger *zap.Logger,
 	pub *publisher.Publisher,
 	st store.Store,
 	poller *Poller,
@@ -37,7 +34,6 @@ func NewWebhookHandler(
 	resolver ConfigResolver,
 ) *WebhookHandler {
 	return &WebhookHandler{
-		logger:    logger,
 		publisher: pub,
 		store:     st,
 		poller:    poller,
@@ -54,8 +50,8 @@ func (h *WebhookHandler) ProcessWebhookEvent(ctx context.Context, clientID strin
 	if h.resolver != nil && clientID != "" {
 		if clientCfg, err := h.resolver.Resolve(ctx, clientID); err == nil && clientCfg.WebhookSecret != "" {
 			if signature == "" || !validateWebhookSignature(clientCfg.WebhookSecret, signature, body) {
-				h.logger.Warn("capa.webhook.invalid_signature",
-					zap.String("client", clientID))
+				slog.Warn("capa.webhook.invalid_signature",
+					"client", clientID)
 				return ErrInvalidSignature
 			}
 		}
@@ -65,11 +61,11 @@ func (h *WebhookHandler) ProcessWebhookEvent(ctx context.Context, clientID strin
 	quoteID := event.ResolvedQuoteID()
 	rawStatus := event.ResolvedStatus()
 
-	h.logger.Info("capa.webhook.received",
-		zap.String("event", event.Event),
-		zap.String("tx_id", txID),
-		zap.String("status", rawStatus),
-		zap.String("client", clientID))
+	slog.Info("capa.webhook.received",
+		"event", event.Event,
+		"tx_id", txID,
+		"status", rawStatus,
+		"client", clientID)
 
 	// Cancel any active polling for this transaction (webhook takes over)
 	if h.poller != nil && txID != "" {
@@ -91,9 +87,9 @@ func (h *WebhookHandler) ProcessWebhookEvent(ctx context.Context, clientID strin
 		}
 		subject := "evt.trade.status_changed.v1.CAPA"
 		if err := h.publisher.Publish(ctx, subject, statusEvent); err != nil {
-			h.logger.Warn("capa.webhook.publish_failed",
-				zap.String("subject", subject),
-				zap.Error(err))
+			slog.Warn("capa.webhook.publish_failed",
+				"subject", subject,
+				"error", err)
 		}
 	}
 
@@ -150,15 +146,15 @@ func (h *WebhookHandler) handleTerminalWebhook(
 		trade := h.service.BuildTradeConfirmationFromTx(clientID, &tx)
 		if trade != nil {
 			if err := h.tradeSync.SyncTradeUpsert(ctx, trade); err != nil {
-				h.logger.Warn("capa.webhook.trade_sync_failed",
-					zap.String("tx_id", txID),
-					zap.String("client", clientID),
-					zap.Error(err))
+				slog.Warn("capa.webhook.trade_sync_failed",
+					"tx_id", txID,
+					"client", clientID,
+					"error", err)
 			} else {
-				h.logger.Info("capa.webhook.trade_synced",
-					zap.String("tx_id", txID),
-					zap.String("client", clientID),
-					zap.String("status", status))
+				slog.Info("capa.webhook.trade_synced",
+					"tx_id", txID,
+					"client", clientID,
+					"status", status)
 			}
 		}
 	}
@@ -175,14 +171,14 @@ func (h *WebhookHandler) handleTerminalWebhook(
 			"source":    "webhook",
 			"timestamp": time.Now().UTC(),
 		}); err != nil {
-			h.logger.Warn("capa.webhook.publish_final_failed",
-				zap.String("subject", finalSubject),
-				zap.Error(err))
+			slog.Warn("capa.webhook.publish_final_failed",
+				"subject", finalSubject,
+				"error", err)
 		}
 	}
 
-	h.logger.Info("capa.webhook.terminal_processed",
-		zap.String("tx_id", txID),
-		zap.String("client", clientID),
-		zap.String("status", status))
+	slog.Info("capa.webhook.terminal_processed",
+		"tx_id", txID,
+		"client", clientID,
+		"status", status)
 }

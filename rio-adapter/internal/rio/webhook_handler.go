@@ -5,11 +5,11 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
@@ -18,7 +18,6 @@ import (
 
 // WebhookHandler handles incoming webhook events from Rio.
 type WebhookHandler struct {
-	logger   *zap.Logger
 	publisher *publisher.Publisher
 	store     store.Store
 	poller    *Poller
@@ -29,7 +28,6 @@ type WebhookHandler struct {
 
 // NewWebhookHandler creates a new WebhookHandler.
 func NewWebhookHandler(
-	logger *zap.Logger,
 	pub *publisher.Publisher,
 	st store.Store,
 	poller *Poller,
@@ -38,7 +36,6 @@ func NewWebhookHandler(
 	resolver ConfigResolver,
 ) *WebhookHandler {
 	return &WebhookHandler{
-		logger:    logger,
 		publisher: pub,
 		store:     st,
 		poller:    poller,
@@ -54,9 +51,9 @@ func (h *WebhookHandler) HandleOrderWebhook(c *fiber.Ctx) error {
 	// Parse body first so we can identify the client for per-client signature validation.
 	var event RioOrderWebhookEvent
 	if err := c.BodyParser(&event); err != nil {
-		h.logger.Warn("rio.webhook.parse_error",
-			zap.Error(err),
-			zap.String("body", string(c.Body())))
+		slog.Warn("rio.webhook.parse_error",
+			"error", err,
+			"body", string(c.Body()))
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid payload",
 		})
@@ -73,9 +70,9 @@ func (h *WebhookHandler) HandleOrderWebhook(c *fiber.Ctx) error {
 				sigHeader := clientCfg.WebhookSigHeader
 				signature := c.Get(sigHeader)
 				if signature == "" || !validateWebhookSignature(clientCfg.WebhookSecret, signature, c.Body()) {
-					h.logger.Warn("rio.webhook.invalid_signature",
-						zap.String("client", clientID),
-						zap.String("header", sigHeader))
+					slog.Warn("rio.webhook.invalid_signature",
+						"client", clientID,
+						"header", sigHeader)
 					return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 						"error": "invalid signature",
 					})
@@ -85,11 +82,11 @@ func (h *WebhookHandler) HandleOrderWebhook(c *fiber.Ctx) error {
 	}
 
 	order := event.Data
-	h.logger.Info("rio.webhook.received",
-		zap.String("event", event.Event),
-		zap.String("order_id", order.ID),
-		zap.String("status", order.Status),
-		zap.String("client_ref", order.ClientReferenceID))
+	slog.Info("rio.webhook.received",
+		"event", event.Event,
+		"order_id", order.ID,
+		"status", order.Status,
+		"client_ref", order.ClientReferenceID)
 
 	ctx := c.UserContext()
 
@@ -115,9 +112,9 @@ func (h *WebhookHandler) HandleOrderWebhook(c *fiber.Ctx) error {
 
 		subject := "evt.trade.status_changed.v1.RIO"
 		if err := h.publisher.Publish(ctx, subject, statusEvent); err != nil {
-			h.logger.Warn("rio.webhook.publish_failed",
-				zap.String("subject", subject),
-				zap.Error(err))
+			slog.Warn("rio.webhook.publish_failed",
+				"subject", subject,
+				"error", err)
 		}
 	}
 
@@ -156,15 +153,15 @@ func (h *WebhookHandler) handleTerminalWebhook(ctx context.Context, order *RioOr
 		trade := h.service.BuildTradeConfirmationFromOrder(clientID, order.ID, order)
 		if trade != nil {
 			if err := h.tradeSync.SyncTradeUpsert(ctx, trade); err != nil {
-				h.logger.Warn("rio.webhook.trade_sync_failed",
-					zap.String("order_id", order.ID),
-					zap.String("client", clientID),
-					zap.Error(err))
+				slog.Warn("rio.webhook.trade_sync_failed",
+					"order_id", order.ID,
+					"client", clientID,
+					"error", err)
 			} else {
-				h.logger.Info("rio.webhook.trade_synced",
-					zap.String("order_id", order.ID),
-					zap.String("client", clientID),
-					zap.String("status", status))
+				slog.Info("rio.webhook.trade_synced",
+					"order_id", order.ID,
+					"client", clientID,
+					"status", status)
 			}
 		}
 	}
@@ -181,14 +178,14 @@ func (h *WebhookHandler) handleTerminalWebhook(ctx context.Context, order *RioOr
 			"source":    "webhook",
 			"timestamp": time.Now().UTC(),
 		}); err != nil {
-			h.logger.Warn("rio.webhook.publish_final_failed",
-				zap.String("subject", finalSubject),
-				zap.Error(err))
+			slog.Warn("rio.webhook.publish_final_failed",
+				"subject", finalSubject,
+				"error", err)
 		}
 	}
 
-	h.logger.Info("rio.webhook.terminal_processed",
-		zap.String("order_id", order.ID),
-		zap.String("client", clientID),
-		zap.String("status", status))
+	slog.Info("rio.webhook.terminal_processed",
+		"order_id", order.ID,
+		"client", clientID,
+		"status", status)
 }

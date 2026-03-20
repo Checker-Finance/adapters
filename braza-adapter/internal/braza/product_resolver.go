@@ -3,6 +3,7 @@ package braza
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,13 +11,11 @@ import (
 	"time"
 
 	"github.com/Checker-Finance/adapters/pkg/model"
-	"go.uber.org/zap"
 )
 
 type ProductResolver struct {
 	baseURL string
 	client  *http.Client
-	logger  *zap.Logger
 
 	cache map[string]model.Product
 	mu    sync.RWMutex
@@ -26,15 +25,14 @@ type ProductResolver struct {
 	mapper *Mapper
 }
 
-func NewProductResolver(baseURL string, logger *zap.Logger) *ProductResolver {
+func NewProductResolver(baseURL string) *ProductResolver {
 	ttl := 1 * time.Minute
-	logger.Info("Initializing product resolver with TTL", zap.Any("ttl", ttl))
+	slog.Info("Initializing product resolver with TTL", "ttl", ttl)
 	return &ProductResolver{
 		baseURL: baseURL,
 		client: &http.Client{
 			Timeout: 5 * time.Second,
 		},
-		logger: logger,
 		cache:  make(map[string]model.Product),
 		ttl:    ttl,
 		mapper: NewMapper(),
@@ -52,17 +50,17 @@ func (r *ProductResolver) ResolveProductID(ctx context.Context, instrument strin
 	p, err := r.resolveBestProduct(inst)
 
 	if err != nil {
-		r.logger.Error("Failed to resolve product", zap.Error(err))
+		slog.Error("Failed to resolve product", "error", err)
 		return 0, err
 	}
 
-	r.logger.Info("found product", zap.String("instrument", instrument), zap.String("normalizedInstrument", inst), zap.Any("product", p))
+	slog.Info("found product", "instrument", instrument, "normalizedInstrument", inst, "product", p)
 	return strconv.Atoi(p.ProductID)
 }
 
 func (r *ProductResolver) resolveBestProduct(pair string) (*model.Product, error) {
 	normalized := NormalizePairForBraza(pair)
-	
+
 	var desired []string
 	if isAfterCutoff(time.Now()) {
 		desired = []string{
@@ -94,7 +92,7 @@ func (r *ProductResolver) setProducts(products []BrazaProductDef) {
 	tmp := make(map[string]model.Product)
 	for _, p := range products {
 		key := cacheKey(NormalizePairForBraza(p.Par), p.Nome)
-		//r.logger.Info("setting product", zap.String("key", key))
+		//slog.Info("setting product", "key", key)
 		tmp[key] = r.mapper.FromBrazaProduct(p)
 	}
 
@@ -104,8 +102,8 @@ func (r *ProductResolver) setProducts(products []BrazaProductDef) {
 	r.mu.Unlock()
 
 	nextSync := time.Now().Add(r.ttl)
-	r.logger.Info("braza.product_sync_next",
-		zap.String("nextSync", nextSync.Format(time.RFC1123)),
+	slog.Info("braza.product_sync_next",
+		"nextSync", nextSync.Format(time.RFC1123),
 	)
 }
 

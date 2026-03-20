@@ -46,24 +46,24 @@ func Load(ctx context.Context) *Config {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		ServiceName:         pkgconfig.GetEnv("SERVICE_NAME", "braza-adapter"),
-		Venue:               "braza",
-		Env:                 pkgconfig.GetEnv("ENV", "dev"),
-		DatabaseURL:         pkgconfig.GetEnv("DATABASE_URL", "postgres://checker:checker@localhost/db_checker?sslmode=disable"),
-		PollInterval:        pkgconfig.GetEnvDuration("POLL_INTERVAL", 5*time.Minute),
-		NATSURL:             pkgconfig.GetEnv("NATS_URL", "nats://localhost:4222"),
-		RedisURL:            pkgconfig.GetEnv("REDIS_URL", "redis://localhost:6379"),
-		AWSRegion:           pkgconfig.GetEnv("AWS_REGION", "us-east-2"),
-		LogLevel:            pkgconfig.GetEnv("LOG_LEVEL", "info"),
-		Port:                pkgconfig.GetEnvInt("BRAZA_PORT", 9010),
-		CacheTTL:            pkgconfig.GetEnvDuration("CACHE_TTL", 24*time.Hour),
-		CleanupFreq:         pkgconfig.GetEnvDuration("CACHE_CLEANUP_FREQ", 10*time.Minute),
-		InboundSubject:      pkgconfig.GetEnv("INBOUND_SUBJECT", "cmd.lp.quote_request.v1.BRAZA"),
-		OutboundSubject:     pkgconfig.GetEnv("OUTBOUND_SUBJECT", "evt.lp.quote_response.v1.BRAZA"),
-		BrazaBaseURL:      pkgconfig.GetEnv("BRAZA_BASE_URL", "http://braza.local"),
-		ClientBalancesIDs:   pkgconfig.GetEnv("CLIENT_BALANCES_IDS", ""),
-		ClientInstrumentID:  pkgconfig.GetEnv("CLIENT_INSTRUMENT_ID", ""),
-		SettlementCutOff:    pkgconfig.GetEnvTime("SETTLEMENT_CUT_OFF", "17:00"),
+		ServiceName:        pkgconfig.GetEnv("SERVICE_NAME", "braza-adapter"),
+		Venue:              "braza",
+		Env:                pkgconfig.GetEnv("ENV", "dev"),
+		DatabaseURL:        pkgconfig.GetEnv("DATABASE_URL", "postgres://checker:checker@localhost/db_checker?sslmode=disable"),
+		PollInterval:       pkgconfig.GetEnvDuration("POLL_INTERVAL", 5*time.Minute),
+		NATSURL:            pkgconfig.GetEnv("NATS_URL", "nats://localhost:4222"),
+		RedisURL:           pkgconfig.GetEnv("REDIS_URL", "redis://localhost:6379"),
+		AWSRegion:          pkgconfig.GetEnv("AWS_REGION", "us-east-2"),
+		LogLevel:           pkgconfig.GetEnv("LOG_LEVEL", "info"),
+		Port:               pkgconfig.GetEnvInt("BRAZA_PORT", 9010),
+		CacheTTL:           pkgconfig.GetEnvDuration("CACHE_TTL", 24*time.Hour),
+		CleanupFreq:        pkgconfig.GetEnvDuration("CACHE_CLEANUP_FREQ", 10*time.Minute),
+		InboundSubject:     pkgconfig.GetEnv("INBOUND_SUBJECT", "cmd.lp.quote_request.v1.BRAZA"),
+		OutboundSubject:    pkgconfig.GetEnv("OUTBOUND_SUBJECT", "evt.lp.quote_response.v1.BRAZA"),
+		BrazaBaseURL:       pkgconfig.GetEnv("BRAZA_BASE_URL", "http://braza.local"),
+		ClientBalancesIDs:  pkgconfig.GetEnv("CLIENT_BALANCES_IDS", ""),
+		ClientInstrumentID: pkgconfig.GetEnv("CLIENT_INSTRUMENT_ID", ""),
+		SettlementCutOff:   pkgconfig.GetEnvTime("SETTLEMENT_CUT_OFF", "17:00"),
 	}
 
 	secretPath := fmt.Sprintf("%s/%s", cfg.Env, cfg.ServiceName)
@@ -93,4 +93,3 @@ func (c *Config) applyServiceSecret(m map[string]string) {
 		c.LogLevel = v
 	}
 }
-

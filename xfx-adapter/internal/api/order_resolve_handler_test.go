@@ -13,7 +13,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/Checker-Finance/adapters/pkg/model"
@@ -63,7 +62,7 @@ func (m *mockStore) GetOrderIDByRFQ(ctx context.Context, rfqID string) (string, 
 
 func newResolveApp(svc OrderResolverService, st store.Store, ts TradeSync) *fiber.App {
 	app := fiber.New()
-	handler := NewOrderResolveHandler(zap.NewNop(), svc, st, ts)
+	handler := NewOrderResolveHandler(svc, st, ts)
 	v1 := app.Group("/api/v1")
 	v1.Post("/resolve-order/:quoteId", handler.ResolveOrder)
 	return app

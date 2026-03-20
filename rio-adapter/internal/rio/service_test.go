@@ -9,7 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/rio-adapter/pkg/config"
 	"github.com/Checker-Finance/adapters/pkg/model"
@@ -86,8 +85,7 @@ func mockRioServer(t *testing.T, quoteResp *RioQuoteResponse, orderResp *RioOrde
 
 func newTestService(t *testing.T, serverURL string) *Service {
 	t.Helper()
-	logger := zap.NewNop()
-	client := NewClient(logger, nil)
+	client := NewClient(nil)
 
 	resolver := &mockConfigResolver{
 		cfg: &RioClientConfig{
@@ -102,7 +100,6 @@ func newTestService(t *testing.T, serverURL string) *Service {
 	return &Service{
 		ctx:            context.Background(),
 		cfg:            config.Config{},
-		logger:         logger,
 		client:         client,
 		configResolver: resolver,
 		publisher:      nil, // syncTerminalTrade safely handles nil publisher
@@ -298,7 +295,6 @@ func TestService_FetchTradeStatus_NotFound(t *testing.T) {
 
 func TestService_BuildTradeConfirmationFromOrder_Success(t *testing.T) {
 	svc := &Service{
-		logger: zap.NewNop(),
 		mapper: NewMapper(),
 	}
 
@@ -328,7 +324,6 @@ func TestService_BuildTradeConfirmationFromOrder_Success(t *testing.T) {
 
 func TestService_BuildTradeConfirmationFromOrder_NilOrder(t *testing.T) {
 	svc := &Service{
-		logger: zap.NewNop(),
 		mapper: NewMapper(),
 	}
 
@@ -381,7 +376,7 @@ func TestService_ExecuteRFQ_UsesServiceContext(t *testing.T) {
 	svc := newTestService(t, server.URL)
 	svc.ctx = serviceCtx
 
-	poller := NewPoller(zap.NewNop(), config.Config{}, svc, nil, nil, 10*time.Millisecond, nil)
+	poller := NewPoller(config.Config{}, svc, nil, nil, 10*time.Millisecond, nil)
 	svc.SetPoller(poller)
 
 	// Use a request context that we cancel immediately after
@@ -408,7 +403,6 @@ func TestService_ExecuteRFQ_UsesServiceContext(t *testing.T) {
 
 func TestService_SyncTerminalTrade_NilPublisher(t *testing.T) {
 	svc := &Service{
-		logger:    zap.NewNop(),
 		publisher: nil, // nil publisher should not panic
 	}
 
@@ -424,7 +418,6 @@ func TestService_SyncTerminalTrade_NilPublisher(t *testing.T) {
 
 func TestService_SyncTerminalTrade_NilTradeSyncWriter(t *testing.T) {
 	svc := &Service{
-		logger:          zap.NewNop(),
 		publisher:       nil,
 		tradeSyncWriter: nil, // nil writer should not panic
 	}

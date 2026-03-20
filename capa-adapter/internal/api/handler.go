@@ -2,9 +2,9 @@ package api
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/pkg/model"
 )
@@ -22,15 +22,13 @@ type ClientValidator interface {
 
 // CapaHandler handles HTTP API requests for Capa operations.
 type CapaHandler struct {
-	logger    *zap.Logger
 	service   RFQService
 	validator ClientValidator
 }
 
 // NewCapaHandler creates a new CapaHandler.
-func NewCapaHandler(logger *zap.Logger, service RFQService, validator ClientValidator) *CapaHandler {
+func NewCapaHandler(service RFQService, validator ClientValidator) *CapaHandler {
 	return &CapaHandler{
-		logger:    logger,
 		service:   service,
 		validator: validator,
 	}
@@ -54,9 +52,9 @@ func (h *CapaHandler) CreateRFQHandler(c *fiber.Ctx) error {
 
 	quote, err := h.service.CreateRFQ(c.Context(), r)
 	if err != nil {
-		h.logger.Error("capa.create_rfq.failed",
-			zap.String("client", req.ClientID),
-			zap.Error(err))
+		slog.Error("capa.create_rfq.failed",
+			"client", req.ClientID,
+			"error", err)
 		return c.Status(fiber.StatusBadRequest).JSON(RFQResponse{
 			QuoteID:  req.ID,
 			ErrorMsg: err.Error(),
@@ -90,16 +88,16 @@ func (h *CapaHandler) ExecuteRFQHandler(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "quoteId is required"})
 	}
 
-	h.logger.Info("capa.execute_rfq",
-		zap.String("client", req.ClientID),
-		zap.String("quote_id", quoteID))
+	slog.Info("capa.execute_rfq",
+		"client", req.ClientID,
+		"quote_id", quoteID)
 
 	trade, err := h.service.ExecuteRFQ(c.Context(), req.ClientID, quoteID)
 	if err != nil {
-		h.logger.Error("capa.execute_rfq.failed",
-			zap.String("client", req.ClientID),
-			zap.String("quote_id", quoteID),
-			zap.Error(err))
+		slog.Error("capa.execute_rfq.failed",
+			"client", req.ClientID,
+			"quote_id", quoteID,
+			"error", err)
 		return c.Status(fiber.StatusBadRequest).JSON(RFQExecutionResponse{
 			OrderID:  req.OrderID,
 			ErrorMsg: err.Error(),

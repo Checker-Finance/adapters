@@ -14,16 +14,16 @@ import (
 // Config holds the core runtime configuration for a service instance.
 // It supports environment-based initialization, with sensible defaults.
 type Config struct {
-	ServiceName  string // e.g. "rio-adapter"
-	Env          string // e.g. "dev", "uat", "prod"
-	Venue        string
-	DatabaseURL  string
-	PollInterval time.Duration
-	NATSURL      string // e.g. nats://localhost:4222
-	RedisURL     string // e.g. redis://localhost:6379 or redis://:pass@host:6379/1
-	AWSRegion    string // for AWS SDK client
-	LogLevel     string // "debug", "info", etc.
-	Port         int    // service HTTP or metrics port
+	ServiceName      string // e.g. "rio-adapter"
+	Env              string // e.g. "dev", "uat", "prod"
+	Venue            string
+	DatabaseURL      string
+	PollInterval     time.Duration
+	NATSURL          string // e.g. nats://localhost:4222
+	RedisURL         string // e.g. redis://localhost:6379 or redis://:pass@host:6379/1
+	AWSRegion        string // for AWS SDK client
+	LogLevel         string // "debug", "info", etc.
+	Port             int    // service HTTP or metrics port
 	HTTPReadTimeout  time.Duration
 	HTTPWriteTimeout time.Duration
 	HTTPIdleTimeout  time.Duration
@@ -117,4 +117,3 @@ func (c *Config) applyServiceSecret(m map[string]string) {
 		c.LogLevel = v
 	}
 }
-

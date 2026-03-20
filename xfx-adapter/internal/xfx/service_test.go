@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/pkg/model"
 	"github.com/Checker-Finance/adapters/xfx-adapter/pkg/config"
@@ -91,7 +90,6 @@ func TestService_CreateRFQ_ResolveConfigError(t *testing.T) {
 	svc := &Service{
 		ctx:    context.Background(),
 		cfg:    config.Config{},
-		logger: zap.NewNop(),
 		configResolver: &mockConfigResolver{
 			err: assert.AnError,
 		},
@@ -290,7 +288,6 @@ func TestService_FetchTransactionStatus_NotFound(t *testing.T) {
 
 func TestService_BuildTradeConfirmationFromTx_Success(t *testing.T) {
 	svc := &Service{
-		logger: zap.NewNop(),
 		mapper: NewMapper(),
 	}
 
@@ -318,7 +315,7 @@ func TestService_BuildTradeConfirmationFromTx_Success(t *testing.T) {
 }
 
 func TestService_BuildTradeConfirmationFromTx_NilTx(t *testing.T) {
-	svc := &Service{logger: zap.NewNop(), mapper: NewMapper()}
+	svc := &Service{mapper: NewMapper()}
 	trade := svc.BuildTradeConfirmationFromTx("client-123", nil)
 	assert.Nil(t, trade)
 }
@@ -327,7 +324,6 @@ func TestService_BuildTradeConfirmationFromTx_NilTx(t *testing.T) {
 
 func TestService_SyncTerminalTrade_NilPublisher(t *testing.T) {
 	svc := &Service{
-		logger:    zap.NewNop(),
 		publisher: nil, // nil publisher should not panic
 	}
 
@@ -398,7 +394,6 @@ func TestService_CreateRFQ_USDC_MXN_ZeroRate(t *testing.T) {
 
 func TestService_SyncTerminalTrade_NilTradeSyncWriter(t *testing.T) {
 	svc := &Service{
-		logger:          zap.NewNop(),
 		publisher:       nil,
 		tradeSyncWriter: nil, // nil writer should not panic
 	}

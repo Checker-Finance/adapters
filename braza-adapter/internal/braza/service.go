@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -13,16 +14,15 @@ import (
 	"time"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/auth"
+	intsecrets "github.com/Checker-Finance/adapters/braza-adapter/internal/secrets"
+	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/internal/rate"
-	intsecrets "github.com/Checker-Finance/adapters/braza-adapter/internal/secrets"
 	"github.com/Checker-Finance/adapters/internal/store"
-	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
 	"github.com/Checker-Finance/adapters/pkg/model"
 	"github.com/Checker-Finance/adapters/pkg/secrets"
 	"github.com/nats-io/nats.go"
-	"go.uber.org/zap"
 )
 
 // Service orchestrates Braza API polling, quote/trade submission,
@@ -30,7 +30,6 @@ import (
 type Service struct {
 	ctx             context.Context
 	cfg             config.Config
-	logger          *zap.Logger
 	nc              *nats.Conn
 	baseURL         string
 	authMgr         *auth.Manager
@@ -50,7 +49,6 @@ type Service struct {
 func NewService(
 	ctx context.Context,
 	cfg config.Config,
-	logger *zap.Logger,
 	nc *nats.Conn,
 	baseURL string,
 	authMgr *auth.Manager,
@@ -64,7 +62,6 @@ func NewService(
 	return &Service{
 		ctx:       ctx,
 		cfg:       cfg,
-		logger:    logger,
 		nc:        nc,
 		baseURL:   baseURL,
 		authMgr:   authMgr,
@@ -93,8 +90,8 @@ func (s *Service) FetchAndPublishBalances(
 	st store.Store,
 	creds auth.Credentials,
 ) error {
-	//s.logger.Info("braza.fetch_balances.start",
-	//	zap.String("client", clientID),
+	//slog.Info("braza.fetch_balances.start",
+	//	"client", clientID,
 	//)
 
 	token, err := s.authMgr.GetValidToken(ctx, clientID, creds)
@@ -129,7 +126,7 @@ func (s *Service) FetchAndPublishBalances(
 	//
 	//s.logger.Sugar().Infow("braza.balance_response.raw",
 	//	"status", resp.StatusCode,
-	//	"body", string(body),
+	//	"body", string(body,
 	//)
 
 	var balancesResp BrazaBalancesResponse
@@ -144,27 +141,27 @@ func (s *Service) FetchAndPublishBalances(
 		bal.LastUpdated = time.Now().UTC()
 
 		if err := st.RecordBalanceEvent(ctx, bal); err != nil {
-			s.logger.Warn("store.record_event_failed",
-				zap.String("instrument", bal.Instrument),
-				zap.Error(err))
+			slog.Warn("store.record_event_failed",
+				"instrument", bal.Instrument,
+				"error", err)
 		}
 
 		if err := st.UpdateBalanceSnapshot(ctx, bal); err != nil {
-			s.logger.Warn("store.update_snapshot_failed",
-				zap.String("instrument", bal.Instrument),
-				zap.Error(err))
+			slog.Warn("store.update_snapshot_failed",
+				"instrument", bal.Instrument,
+				"error", err)
 		}
 
 		if err := pub.Publish(ctx, "evt.balance.update.v1", bal); err != nil {
-			s.logger.Warn("publish_failed",
-				zap.String("instrument", bal.Instrument),
-				zap.Error(err))
+			slog.Warn("publish_failed",
+				"instrument", bal.Instrument,
+				"error", err)
 		}
 	}
 
-	//s.logger.Info("braza.fetch_balances.done",
-	//	zap.Int("count", len(balances)),
-	//	zap.String("client", clientID))
+	//slog.Info("braza.fetch_balances.done",
+	//	"count", len(balances),
+	//	"client", clientID)
 
 	return nil
 }
@@ -197,8 +194,8 @@ func (s *Service) CreateRFQ(
 	}
 
 	body, _ := json.Marshal(brazaReq)
-	s.logger.Info("sending braza RFQ body",
-		zap.String("json", pretty(brazaReq)))
+	slog.Info("sending braza RFQ body",
+		"json", pretty(brazaReq))
 
 	url := fmt.Sprintf("%s/rates-ttl/v2/order/preview-quotation", s.baseURL)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
@@ -214,18 +211,18 @@ func (s *Service) CreateRFQ(
 	if err != nil {
 		var netErr net.Error
 		if errors.As(err, &netErr) && netErr.Timeout() {
-			s.logger.Error("braza.request_timeout",
-				zap.String("client_id", req.ClientID),
-				zap.String("url", url),
-				zap.Duration("timeout", s.client.Timeout),
-				zap.Error(err),
+			slog.Error("braza.request_timeout",
+				"client_id", req.ClientID,
+				"url", url,
+				"timeout", s.client.Timeout,
+				"error", err,
 			)
 			return nil, fmt.Errorf("timeout: Braza did not respond within %s", s.client.Timeout)
 		}
 
-		s.logger.Error("braza.request_failed",
-			zap.String("client_id", req.ClientID),
-			zap.Error(err),
+		slog.Error("braza.request_failed",
+			"client_id", req.ClientID,
+			"error", err,
 		)
 		return nil, fmt.Errorf("request_failed: %w", err)
 	}
@@ -242,12 +239,12 @@ func (s *Service) CreateRFQ(
 			detail = msg
 		}
 
-		s.logger.Info("braza.rfq_create_failed",
-			zap.String("tenant", req.TenantID),
-			zap.String("client", req.ClientID),
-			zap.Int("status", resp.StatusCode),
-			zap.String("reason", detail),
-			zap.Any("response", errBody),
+		slog.Info("braza.rfq_create_failed",
+			"tenant", req.TenantID,
+			"client", req.ClientID,
+			"status", resp.StatusCode,
+			"reason", detail,
+			"response", errBody,
 		)
 
 		return nil, fmt.Errorf("braza rfq create failed [%d]: %s", resp.StatusCode, detail)
@@ -260,20 +257,20 @@ func (s *Service) CreateRFQ(
 	}
 
 	quote := s.mapper.FromBrazaQuote(quoteResp, req.ClientID)
-	s.logger.Info("braza.rfq_created",
-		zap.String("client", req.ClientID),
-		zap.String("quote_id", quote.ID),
-		zap.Float64("price", quote.Price),
-		zap.String("instrument", quote.Instrument),
+	slog.Info("braza.rfq_created",
+		"client", req.ClientID,
+		"quote_id", quote.ID,
+		"price", quote.Price,
+		"instrument", quote.Instrument,
 	)
 
 	return &quote, nil
 }
 
 func (s *Service) ExecuteRFQ(ctx context.Context, clientID, quoteID string) (*BrazaExecuteResponse, error) {
-	s.logger.Info("braza.execute_rfq.start",
-		zap.String("client", clientID),
-		zap.String("quoteID", quoteID),
+	slog.Info("braza.execute_rfq.start",
+		"client", clientID,
+		"quoteID", quoteID,
 	)
 
 	credsMap, err := s.resolver.Resolve(ctx, clientID)
@@ -291,7 +288,7 @@ func (s *Service) ExecuteRFQ(ctx context.Context, clientID, quoteID string) (*Br
 	}
 
 	url := fmt.Sprintf("%s/rates-ttl/v2/order/%s/execute-order", s.baseURL, quoteID)
-	s.logger.Info("braza.rfq_request_sent", zap.String("url", url), zap.String("client", clientID), zap.String("quoteID", quoteID))
+	slog.Info("braza.rfq_request_sent", "url", url, "client", clientID, "quoteID", quoteID)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
@@ -309,11 +306,11 @@ func (s *Service) ExecuteRFQ(ctx context.Context, clientID, quoteID string) (*Br
 			detail = msg
 		}
 
-		s.logger.Warn("braza.execute_rfq",
-			zap.String("client", clientID),
-			zap.Int("status", resp.StatusCode),
-			zap.String("reason", detail),
-			zap.Any("response", errBody),
+		slog.Warn("braza.execute_rfq",
+			"client", clientID,
+			"status", resp.StatusCode,
+			"reason", detail,
+			"response", errBody,
 		)
 
 		return nil, fmt.Errorf("braza rfq execution failed [%d]: %s", resp.StatusCode, detail)
@@ -331,10 +328,10 @@ func (s *Service) ExecuteRFQ(ctx context.Context, clientID, quoteID string) (*Br
 		defer cancel()
 		orderID, err := s.ResolveOrderIDFromQuote(pollCtx, quoteID)
 		if err != nil {
-			s.logger.Warn("braza.order_id_resolution_failed",
-				zap.String("quoteID", quoteID),
-				zap.String("client", clientID),
-				zap.Error(err),
+			slog.Warn("braza.order_id_resolution_failed",
+				"quoteID", quoteID,
+				"client", clientID,
+				"error", err,
 			)
 		} else {
 			go s.poller.PollTradeStatus(ctx, clientID, quoteID, orderID, creds)
@@ -353,9 +350,9 @@ func (s *Service) FetchTradeStatus(
 ) (*BrazaOrderStatus, error) {
 	token, err := s.authMgr.GetValidToken(ctx, clientID, creds)
 	if err != nil {
-		s.logger.Warn("braza.token_resolve_failed",
-			zap.String("client", clientID),
-			zap.Error(err))
+		slog.Warn("braza.token_resolve_failed",
+			"client", clientID,
+			"error", err)
 		return nil, err
 	}
 
@@ -428,7 +425,7 @@ func (s *Service) BuildTradeConfirmationFromOrder(
 	raw, _ := json.Marshal(order)
 	// Construct the trade confirmation
 
-	s.logger.Info("braza.trade_confirmation_from_order", zap.String("order", string(raw)))
+	slog.Info("braza.trade_confirmation_from_order", "order", string(raw))
 	return &model.TradeConfirmation{
 		TradeID:         orderID,
 		ClientID:        clientID,
@@ -521,9 +518,8 @@ func (s *Service) syncOnce(ctx context.Context, clientID, venue string, creds au
 
 	s.productResolver.setProducts(products)
 
-	s.logger.Info("braza.product_sync_complete",
-		zap.Int("count", len(data.Results)),
-		zap.String("client", clientID),
+	slog.Info("braza.product_sync_complete",
+		"count", len(data.Results), "client", clientID,
 	)
 	return nil
 }
@@ -531,31 +527,31 @@ func (s *Service) syncOnce(ctx context.Context, clientID, venue string, creds au
 // PublishErrorEvent logs and publishes an error event for a failed command.
 func (s *Service) PublishErrorEvent(env model.Envelope, err error, code string, logError bool) {
 	if logError {
-		s.logger.Error("service error event",
-			zap.String("code", code),
-			zap.String("tenant_id", env.TenantID),
-			zap.String("client_id", env.ClientID),
-			zap.Error(err),
+		slog.Error("service error event",
+			"code", code,
+			"tenant_id", env.TenantID,
+			"client_id", env.ClientID,
+			"error", err,
 		)
 	}
 }
 
 // HandleQuoteRequest processes a NATS quote request command.
 func (s *Service) HandleQuoteRequest(ctx context.Context, env model.Envelope, req model.QuoteRequest) error {
-	s.logger.Info("HandleQuoteRequest",
-		zap.String("tenant_id", env.TenantID),
-		zap.String("client_id", env.ClientID),
-		zap.String("instrument", req.Instrument),
+	slog.Info("HandleQuoteRequest",
+		"tenant_id", env.TenantID,
+		"client_id", env.ClientID,
+		"instrument", req.Instrument,
 	)
 	return nil
 }
 
 // HandleTradeExecute processes a NATS trade execution command.
 func (s *Service) HandleTradeExecute(ctx context.Context, env model.Envelope, cmd model.TradeCommand) error {
-	s.logger.Info("HandleTradeExecute",
-		zap.String("tenant_id", env.TenantID),
-		zap.String("client_id", env.ClientID),
-		zap.String("quote_id", cmd.QuoteID),
+	slog.Info("HandleTradeExecute",
+		"tenant_id", env.TenantID,
+		"client_id", env.ClientID,
+		"quote_id", cmd.QuoteID,
 	)
 	return nil
 }

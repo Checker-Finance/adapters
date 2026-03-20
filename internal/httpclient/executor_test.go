@@ -13,11 +13,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 func newExec(retryMax int, client *http.Client) *Executor {
-	return New(zap.NewNop(), nil, client, retryMax, "test", nil)
+	return New(nil, client, retryMax, "test", nil)
 }
 
 // countingHandler returns a handler whose response alternates based on a call counter.
@@ -158,7 +157,7 @@ func TestDoJSON_CustomErrorHandlerCalled(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	exec := New(zap.NewNop(), nil, srv.Client(), 2, "test", func(status int, body []byte) error {
+	exec := New(nil, srv.Client(), 2, "test", func(status int, body []byte) error {
 		return fmt.Errorf("venue %d: %s", status, body)
 	})
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, srv.URL, nil)

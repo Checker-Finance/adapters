@@ -8,7 +8,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/pkg/model"
 )
@@ -152,8 +151,7 @@ func TestNewTestStoreWithLogger(t *testing.T) {
 	require.NoError(t, err)
 	defer mr.Close()
 
-	// nil logger should default to zap.NewNop
-	st, err := NewHybrid("redis://"+mr.Addr(), "", PGPoolConfig{}, nil)
+	st, err := NewHybrid("redis://"+mr.Addr(), "", PGPoolConfig{})
 	require.NoError(t, err)
 	require.NotNil(t, st)
 
@@ -166,7 +164,7 @@ func TestNewHybrid_WithExplicitLogger(t *testing.T) {
 	require.NoError(t, err)
 	defer mr.Close()
 
-	st, err := NewHybrid("redis://"+mr.Addr(), "", PGPoolConfig{}, zap.NewNop())
+	st, err := NewHybrid("redis://"+mr.Addr(), "", PGPoolConfig{})
 	require.NoError(t, err)
 	require.NotNil(t, st)
 
@@ -175,7 +173,7 @@ func TestNewHybrid_WithExplicitLogger(t *testing.T) {
 }
 
 func TestNewHybrid_InvalidRedis(t *testing.T) {
-	_, err := NewHybrid("redis://localhost:1", "", PGPoolConfig{}, nil)
+	_, err := NewHybrid("redis://localhost:1", "", PGPoolConfig{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "redis ping failed")
 }
@@ -185,6 +183,6 @@ func TestNewHybrid_InvalidPGURL(t *testing.T) {
 	require.NoError(t, err)
 	defer mr.Close()
 
-	_, err = NewHybrid("redis://"+mr.Addr(), "not-a-valid-pg-url", PGPoolConfig{}, nil)
+	_, err = NewHybrid("redis://"+mr.Addr(), "not-a-valid-pg-url", PGPoolConfig{})
 	assert.Error(t, err)
 }

@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/rio-adapter/pkg/config"
 )
@@ -69,9 +68,7 @@ func errorServer(t *testing.T) *httptest.Server {
 
 func newTestPoller(t *testing.T, svc *Service, interval time.Duration) *Poller {
 	t.Helper()
-	return NewPoller(
-		zap.NewNop(),
-		config.Config{},
+	return NewPoller(config.Config{},
 		svc,
 		nil, // publisher
 		nil, // store
@@ -245,7 +242,6 @@ func TestPoller_StatusChangeDetection(t *testing.T) {
 
 func TestPoller_IsPolling_Nonexistent(t *testing.T) {
 	poller := &Poller{
-		logger: zap.NewNop(),
 		stopCh: make(chan struct{}),
 	}
 	assert.False(t, poller.IsPolling("nonexistent-order"))
@@ -253,7 +249,6 @@ func TestPoller_IsPolling_Nonexistent(t *testing.T) {
 
 func TestPoller_CancelPolling_Nonexistent(t *testing.T) {
 	poller := &Poller{
-		logger: zap.NewNop(),
 		stopCh: make(chan struct{}),
 	}
 	// Should not panic

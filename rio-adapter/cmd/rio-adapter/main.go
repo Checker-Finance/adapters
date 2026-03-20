@@ -3,22 +3,23 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/api"
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/internal/rate"
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/rio"
-	internalsecrets "github.com/Checker-Finance/adapters/rio-adapter/internal/secrets"
 	"github.com/Checker-Finance/adapters/internal/store"
-	"github.com/Checker-Finance/adapters/rio-adapter/pkg/config"
 	"github.com/Checker-Finance/adapters/pkg/logger"
 	"github.com/Checker-Finance/adapters/pkg/secrets"
 	"github.com/Checker-Finance/adapters/pkg/utils"
+	"github.com/Checker-Finance/adapters/rio-adapter/internal/api"
+	"github.com/Checker-Finance/adapters/rio-adapter/internal/rio"
+	internalsecrets "github.com/Checker-Finance/adapters/rio-adapter/internal/secrets"
+	"github.com/Checker-Finance/adapters/rio-adapter/pkg/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/nats-io/nats.go"
 )
@@ -33,14 +34,14 @@ func main() {
 	cfg.Venue = "rio"
 
 	logger.Init(cfg.ServiceName, cfg.Env, cfg.LogLevel)
-	logg := logger.S()
-	logg.Info("starting [rio-adapter]...")
-	logg.Info("connection to DSN: ", utils.MaskDSN(cfg.DatabaseURL))
+	slog.Info("starting [rio-adapter]...")
+	slog.Info("connection to DSN", "dsn", utils.MaskDSN(cfg.DatabaseURL))
 
 	// --- AWS Secrets Manager provider ---
 	awsProvider, err := secrets.NewAWSProvider(cfg.AWSRegion)
 	if err != nil {
-		logg.Fatalw("failed to create AWS Secrets Manager provider", "error", err)
+		slog.Error("failed to create AWS Secrets Manager provider", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Per-client config resolver (secrets cached in-memory) ---
@@ -49,7 +50,6 @@ func main() {
 	go configCache.StartCleaner(cfg.CleanupFreq, stopCleaner)
 
 	resolver := internalsecrets.NewAWSResolver(
-		logg.Desugar(),
 		*cfg,
 		awsProvider,
 		configCache,
@@ -58,21 +58,23 @@ func main() {
 	// --- Discover configured clients ---
 	clients, err := resolver.DiscoverClients(ctx)
 	if err != nil {
-		logg.Warnw("failed to discover clients from AWS Secrets Manager", "error", err)
+		slog.Warn("failed to discover clients from AWS Secrets Manager", "error", err)
 	} else {
-		logg.Infow("discovered Rio clients", "count", len(clients), "clients", clients)
+		slog.Info("discovered Rio clients", "count", len(clients), "clients", clients)
 	}
 
 	// --- Connect to NATS ---
 	nc, err := nats.Connect(cfg.NATSURL)
 	if err != nil {
-		logg.Fatalw("failed to connect to NATS", "error", err)
+		slog.Error("failed to connect to NATS", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Publisher ---
 	pub, err := publisher.New(nc, "evt.rio", "RIO_EVENTS")
 	if err != nil {
-		logg.Fatalw("failed to init publisher", "error", err)
+		slog.Error("failed to init publisher", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Rate limiter ---
@@ -89,17 +91,17 @@ func main() {
 		MaxConnLifetime:   cfg.PGMaxConnLifetime,
 		MaxConnIdleTime:   cfg.PGMaxConnIdleTime,
 		HealthCheckPeriod: cfg.PGHealthCheckPeriod,
-	}, logg.Desugar())
+	})
 	if err != nil {
-		logg.Fatalw("failed to init store", "error", err)
+		slog.Error("failed to init store", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Legacy trade sync writer ---
-	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, logger.L(), "rio-adapter")
+	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, "rio-adapter")
 
 	// --- Rio HTTP Client (config supplied per-request) ---
 	rioClient := rio.NewClient(
-		logg.Desugar(),
 		rateMgr,
 	)
 
@@ -107,7 +109,6 @@ func main() {
 	rioSvc := rio.NewService(
 		ctx,
 		*cfg,
-		logg.Desugar(),
 		nc,
 		rioClient,
 		resolver,
@@ -118,7 +119,6 @@ func main() {
 
 	// --- Rio Poller (fallback for webhooks) ---
 	poller := rio.NewPoller(
-		logg.Desugar(),
 		*cfg,
 		rioSvc,
 		pub,
@@ -130,7 +130,6 @@ func main() {
 
 	// --- Rio Webhook Handler ---
 	webhookHandler := rio.NewWebhookHandler(
-		logg.Desugar(),
 		pub,
 		st,
 		poller,
@@ -149,27 +148,27 @@ func main() {
 
 	// Rio API Handler (with client validation via config resolver)
 	clientValidator := api.NewResolverValidator(resolver)
-	rioHandler := api.NewRioHandler(logg.Desugar(), rioSvc, clientValidator)
+	rioHandler := api.NewRioHandler(rioSvc, clientValidator)
 
 	// Order resolve handler
 	orderResolveHandler := &api.OrderResolveHandler{
-		Logger:    logg.Desugar(),
 		Service:   rioSvc,
 		Store:     st,
 		TradeSync: tradeSyncWriter,
 	}
 
-	productsHandler := api.NewProductsHandler(st, cfg.Venue, logg.Desugar())
-	balanceHandler := api.NewBalanceHandler(st, logg.Desugar())
+	productsHandler := api.NewProductsHandler(st, cfg.Venue)
+	balanceHandler := api.NewBalanceHandler(st)
 	api.RegisterRoutes(app, nc, st, rioHandler, orderResolveHandler, webhookHandler, productsHandler, balanceHandler)
 
 	// Start HTTP server
 	serverReady := make(chan struct{})
 	go func() {
-		logg.Infof("HTTP API listening on :%d", cfg.Port)
+		slog.Info("HTTP API listening", "port", cfg.Port)
 		close(serverReady)
 		if err := app.Listen(fmt.Sprintf(":%d", cfg.Port)); err != nil {
-			logg.Fatalw("fiber.listen_failed", "error", err)
+			slog.Error("fiber.listen_failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -177,31 +176,31 @@ func main() {
 	go func() {
 		<-serverReady // wait for HTTP server to start
 		if err := rioSvc.RegisterOrderWebhook(ctx); err != nil {
-			logg.Warnw("failed to register webhooks with Rio", "error", err)
+			slog.Warn("failed to register webhooks with Rio", "error", err)
 		}
 	}()
 
 	// --- Main process stays alive until interrupted ---
-	logg.Infow("[rio-adapter] running",
+	slog.Info("[rio-adapter] running",
 		"nats", cfg.NATSURL,
 		"env", cfg.Env,
 		"poll_interval", cfg.RioPollInterval,
 		"discovered_clients", len(clients))
 
 	<-ctx.Done()
-	logg.Info("shutting down [rio-adapter]...")
+	slog.Info("shutting down [rio-adapter]...")
 
 	close(stopCleaner)
 	poller.Stop()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
-		logg.Warnw("fiber.shutdown_failed", "error", err)
+		slog.Warn("fiber.shutdown_failed", "error", err)
 	}
 	if err := nc.Drain(); err != nil {
-		logg.Warnw("nats.drain_failed", "error", err)
+		slog.Warn("nats.drain_failed", "error", err)
 	}
 	if err := st.Close(); err != nil {
-		logg.Warnw("store.close_failed", "error", err)
+		slog.Warn("store.close_failed", "error", err)
 	}
 }

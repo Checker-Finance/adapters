@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // mockTransport is an http.RoundTripper that delegates to a handler function.
@@ -40,7 +39,7 @@ const (
 // newTokenManagerWithTransport creates a TokenManager with a custom HTTP transport.
 func newTokenManagerWithTransport(t *testing.T, fn func(*http.Request) (*http.Response, error)) *TokenManager {
 	t.Helper()
-	tm := NewTokenManager(zap.NewNop())
+	tm := NewTokenManager()
 	tm.client = &http.Client{Transport: &mockTransport{fn: fn}}
 	return tm
 }

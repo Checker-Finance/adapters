@@ -5,10 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/httpclient"
 	"github.com/Checker-Finance/adapters/internal/rate"
@@ -19,15 +18,14 @@ import (
 // Configuration (base URL, credentials) is supplied per-request so a single
 // RESTClient instance can serve multiple tenants.
 type RESTClient struct {
-	logger *zap.Logger
 	exec   *httpclient.Executor
 	signer *HMACSigner
 }
 
 // NewRESTClient constructs a new Zodia REST client.
-func NewRESTClient(logger *zap.Logger, rateMgr *rate.Manager, signer *HMACSigner) *RESTClient {
+func NewRESTClient(rateMgr *rate.Manager, signer *HMACSigner) *RESTClient {
 	httpClient := &http.Client{Timeout: 30 * time.Second}
-	exec := httpclient.New(logger, rateMgr, httpClient, 2, "zodia", func(status int, body []byte) error {
+	exec := httpclient.New(rateMgr, httpClient, 2, "zodia", func(status int, body []byte) error {
 		var errResp ZodiaErrorResponse
 		_ = json.Unmarshal(body, &errResp)
 
@@ -39,15 +37,14 @@ func NewRESTClient(logger *zap.Logger, rateMgr *rate.Manager, signer *HMACSigner
 			msg = string(body)
 		}
 
-		logger.Warn("zodia.rest_client_error",
-			zap.Int("status", status),
-			zap.String("message", msg),
-			zap.String("body", string(body)))
+		slog.Warn("zodia.rest_client_error",
+			"status", status,
+			"message", msg,
+			"body", string(body))
 
 		return fmt.Errorf("zodia returned %d: %s", status, msg)
 	})
 	return &RESTClient{
-		logger: logger,
 		exec:   exec,
 		signer: signer,
 	}

@@ -5,10 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/httpclient"
 	"github.com/Checker-Finance/adapters/internal/rate"
@@ -18,22 +17,21 @@ import (
 // Configuration (base URL, API key) is supplied per-request via RioClientConfig
 // so that a single Client instance can serve multiple tenants.
 type Client struct {
-	logger *zap.Logger
-	exec   *httpclient.Executor
+	exec *httpclient.Executor
 }
 
 // NewClient constructs a new Rio HTTP client instance.
-func NewClient(logger *zap.Logger, rateMgr *rate.Manager) *Client {
+func NewClient(rateMgr *rate.Manager) *Client {
 	httpClient := &http.Client{Timeout: 30 * time.Second}
-	exec := httpclient.New(logger, rateMgr, httpClient, 2, "rio", func(status int, body []byte) error {
+	exec := httpclient.New(rateMgr, httpClient, 2, "rio", func(status int, body []byte) error {
 		var errResp RioErrorResponse
 		_ = json.Unmarshal(body, &errResp)
 
-		logger.Warn("rio.client_error",
-			zap.Int("status", status),
-			zap.String("error", errResp.Error),
-			zap.String("message", errResp.Message),
-			zap.String("body", string(body)))
+		slog.Warn("rio.client_error",
+			"status", status,
+			"error", errResp.Error,
+			"message", errResp.Message,
+			"body", string(body))
 
 		errMsg := errResp.Message
 		if errMsg == "" {
@@ -45,8 +43,7 @@ func NewClient(logger *zap.Logger, rateMgr *rate.Manager) *Client {
 		return fmt.Errorf("rio returned %d: %s", status, errMsg)
 	})
 	return &Client{
-		logger: logger,
-		exec:   exec,
+		exec: exec,
 	}
 }
 

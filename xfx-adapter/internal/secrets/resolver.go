@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"go.uber.org/zap"
-
-	"github.com/Checker-Finance/adapters/xfx-adapter/internal/xfx"
-	"github.com/Checker-Finance/adapters/xfx-adapter/pkg/config"
 	intsecrets "github.com/Checker-Finance/adapters/internal/secrets"
 	pkgsecrets "github.com/Checker-Finance/adapters/pkg/secrets"
+	"github.com/Checker-Finance/adapters/xfx-adapter/internal/xfx"
+	"github.com/Checker-Finance/adapters/xfx-adapter/pkg/config"
 )
 
 // AWSResolver resolves per-client XFX configuration from AWS Secrets Manager.
@@ -23,12 +21,11 @@ type AWSResolver struct {
 
 // NewAWSResolver constructs an XFX-specific config resolver.
 func NewAWSResolver(
-	logger *zap.Logger,
 	cfg config.Config,
 	provider pkgsecrets.Provider,
 	cache *pkgsecrets.Cache[xfx.XFXClientConfig],
 ) *AWSResolver {
-	inner := intsecrets.NewAWSResolver(logger, cfg.Env, "xfx", provider, cache)
+	inner := intsecrets.NewAWSResolver(cfg.Env, "xfx", provider, cache)
 	return &AWSResolver{inner: inner}
 }
 

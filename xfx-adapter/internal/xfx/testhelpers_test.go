@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/xfx-adapter/pkg/config"
 )
@@ -115,12 +114,10 @@ func newMockXFXServer(
 // The token manager is pre-seeded so no Auth0 calls occur.
 func newTestService(t *testing.T, serverURL string) *Service {
 	t.Helper()
-	logger := zap.NewNop()
-
-	tokens := NewTokenManager(logger)
+	tokens := NewTokenManager()
 	seedToken(tokens, "test-client-id")
 
-	client := NewClient(logger, nil, tokens)
+	client := NewClient(nil, tokens)
 
 	resolver := &mockConfigResolver{
 		cfg: &XFXClientConfig{
@@ -134,7 +131,6 @@ func newTestService(t *testing.T, serverURL string) *Service {
 	return &Service{
 		ctx:            context.Background(),
 		cfg:            config.Config{},
-		logger:         logger,
 		client:         client,
 		configResolver: resolver,
 		publisher:      nil,
@@ -146,7 +142,6 @@ func newTestService(t *testing.T, serverURL string) *Service {
 func newTestPoller(t *testing.T, svc *Service, interval time.Duration) *Poller {
 	t.Helper()
 	return NewPoller(
-		zap.NewNop(),
 		config.Config{},
 		svc,
 		nil, // publisher

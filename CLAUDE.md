@@ -13,7 +13,7 @@ adapters/                    # Root module (go.mod here)
 ├── pkg/                     # Shared libraries (canonical models, secrets, logger, utils)
 │   ├── model/               # Canonical domain models (Quote, Trade, Settlement, etc.)
 │   ├── secrets/             # Generic TTL cache + AWS Secrets Manager provider
-│   ├── logger/              # Structured logging (zap)
+│   ├── logger/              # Structured logging (slog)
 │   └── utils/               # Utilities (DSN masking, etc.)
 ├── internal/                # Shared internal packages
 │   ├── store/               # Hybrid Redis-first, Postgres-backed persistence layer
@@ -25,7 +25,7 @@ adapters/                    # Root module (go.mod here)
 │   └── jobs/                # Background jobs (summary refresher)
 ├── rio-adapter/             # Rio Bank FXCore integration (Fiber + NATS + Postgres/Redis)
 ├── braza-adapter/           # Braza FX integration (Fiber + NATS + Postgres/Redis)
-├── kiiex-adapter/           # Kiiex/AlphaPoint integration (WebSocket + RabbitMQ)
+├── kiiex-adapter/           # Kiiex/AlphaPoint integration (WebSocket + NATS)
 ├── xfx-adapter/             # XFX Trading API integration (Fiber + NATS + Postgres/Redis)
 └── scripts/                 # OIDC AWS setup scripts
 ```

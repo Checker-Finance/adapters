@@ -6,7 +6,6 @@ import (
 
 	intsecrets "github.com/Checker-Finance/adapters/internal/secrets"
 	pkgsecrets "github.com/Checker-Finance/adapters/pkg/secrets"
-	"go.uber.org/zap"
 )
 
 // Provider is the interface expected by components needing per-client credential resolution.
@@ -21,12 +20,11 @@ type AWSResolver struct {
 
 // NewAWSResolver constructs an AWSResolver for the Braza adapter.
 func NewAWSResolver(
-	logger *zap.Logger,
 	env string,
 	provider pkgsecrets.Provider,
 	cache *pkgsecrets.Cache[pkgsecrets.Credentials],
 ) *AWSResolver {
-	inner := intsecrets.NewAWSResolver(logger, env, "braza", provider, cache)
+	inner := intsecrets.NewAWSResolver(env, "braza", provider, cache)
 	return &AWSResolver{inner: inner}
 }
 

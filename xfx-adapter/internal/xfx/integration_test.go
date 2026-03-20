@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/rate"
 	intsecrets "github.com/Checker-Finance/adapters/internal/secrets"
@@ -43,7 +42,6 @@ func newIntegrationConfig(t *testing.T) *XFXClientConfig {
 		region = "us-east-2"
 	}
 
-	logger, _ := zap.NewDevelopment()
 
 	provider, err := pkgsecrets.NewAWSProvider(region)
 	if err != nil {
@@ -51,7 +49,7 @@ func newIntegrationConfig(t *testing.T) *XFXClientConfig {
 	}
 
 	cache := pkgsecrets.NewCache[XFXClientConfig](24 * time.Hour)
-	resolver := intsecrets.NewAWSResolver[XFXClientConfig](logger, env, "xfx", provider, cache)
+	resolver := intsecrets.NewAWSResolver[XFXClientConfig](env, "xfx", provider, cache)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -80,16 +78,14 @@ func newIntegrationConfig(t *testing.T) *XFXClientConfig {
 func newIntegrationClient(t *testing.T) (*Client, *XFXClientConfig) {
 	t.Helper()
 	cfg := newIntegrationConfig(t)
-	logger, _ := zap.NewDevelopment()
-	tokens := NewTokenManager(logger)
-	return NewClient(logger, rate.NewManager(rate.Config{RequestsPerSecond: 10, Burst: 20}), tokens), cfg
+	tokens := NewTokenManager()
+	return NewClient(rate.NewManager(rate.Config{RequestsPerSecond: 10, Burst: 20}), tokens), cfg
 }
 
 // TestIntegration_Auth verifies that Auth0 client credentials flow succeeds.
 func TestIntegration_Auth(t *testing.T) {
 	cfg := newIntegrationConfig(t)
-	logger, _ := zap.NewDevelopment()
-	tokens := NewTokenManager(logger)
+	tokens := NewTokenManager()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

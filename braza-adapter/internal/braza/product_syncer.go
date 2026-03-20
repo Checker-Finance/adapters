@@ -4,18 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/auth"
-	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
+	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/Checker-Finance/adapters/pkg/model"
-	"go.uber.org/zap"
 )
 
 type ProductSyncer struct {
-	logger   *zap.Logger
 	store    store.Store
 	baseURL  string
 	authMgr  *auth.Manager
@@ -23,9 +22,8 @@ type ProductSyncer struct {
 	interval time.Duration
 }
 
-func NewProductSyncer(logger *zap.Logger, store store.Store, baseURL string, authMgr *auth.Manager, interval time.Duration) *ProductSyncer {
+func NewProductSyncer(store store.Store, baseURL string, authMgr *auth.Manager, interval time.Duration) *ProductSyncer {
 	return &ProductSyncer{
-		logger:   logger,
 		store:    store,
 		baseURL:  baseURL,
 		authMgr:  authMgr,
@@ -39,19 +37,19 @@ func (p *ProductSyncer) Start(ctx context.Context, clientID string, cfg config.C
 	defer ticker.Stop()
 	creds, err := p.authMgr.GetCredentials(ctx, cfg, clientID, cfg.Venue)
 	if err != nil {
-		p.logger.Error("Failed to get credentials", zap.Error(err))
+		slog.Error("Failed to get credentials", "error", err)
 		return
 	}
 	for {
 		if err := p.syncOnce(ctx, clientID, cfg.Venue, creds); err != nil {
-			p.logger.Warn("braza.product_sync_failed", zap.Error(err))
+			slog.Warn("braza.product_sync_failed", "error", err)
 		}
 
 		select {
 		case <-ticker.C:
 			continue
 		case <-ctx.Done():
-			p.logger.Info("braza.product_sync_stopped")
+			slog.Info("braza.product_sync_stopped")
 			return
 		}
 	}
@@ -84,7 +82,7 @@ func (p *ProductSyncer) syncOnce(ctx context.Context, clientID, venue string, cr
 	}
 
 	for _, product := range data.Results {
-		//p.logger.Info("product", zap.Any("product", product))
+		//slog.Info("product", "product", product)
 		pr := model.Product{
 			VenueCode:        venue,
 			ProductID:        parseIntString(product.ID),
@@ -95,13 +93,12 @@ func (p *ProductSyncer) syncOnce(ctx context.Context, clientID, venue string, cr
 			AsOf:             time.Now(),
 		}
 		if err := p.store.StoreProduct(ctx, pr); err != nil {
-			p.logger.Warn("braza.product_upsert_failed", zap.Error(err))
+			slog.Warn("braza.product_upsert_failed", "error", err)
 		}
 	}
 
-	p.logger.Info("braza.product_sync_complete",
-		zap.Int("count", len(data.Results)),
-		zap.String("client", clientID),
+	slog.Info("braza.product_sync_complete",
+		"count", len(data.Results), "client", clientID,
 	)
 	return nil
 }

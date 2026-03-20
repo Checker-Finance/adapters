@@ -2,23 +2,22 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
 )
 
 // BalanceHandler handles the GET /api/v1/balances/:client_id endpoint.
 type BalanceHandler struct {
-	store  store.Store
-	logger *zap.Logger
+	store store.Store
 }
 
 // NewBalanceHandler creates a new BalanceHandler.
-func NewBalanceHandler(st store.Store, logger *zap.Logger) *BalanceHandler {
-	return &BalanceHandler{store: st, logger: logger}
+func NewBalanceHandler(st store.Store) *BalanceHandler {
+	return &BalanceHandler{store: st}
 }
 
 // GetBalances returns the balances for the given client.
@@ -33,7 +32,7 @@ func (h *BalanceHandler) GetBalances(c *fiber.Ctx) error {
 
 	balances, err := h.store.GetClientBalances(ctx, clientID)
 	if err != nil {
-		h.logger.Error("xfx.get_balances.failed", zap.String("client_id", clientID), zap.Error(err))
+		slog.Error("xfx.get_balances.failed", "client_id", clientID, "error", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 

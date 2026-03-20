@@ -3,10 +3,10 @@ package secrets
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	pkgsecrets "github.com/Checker-Finance/adapters/pkg/secrets"
-	"go.uber.org/zap"
 )
 
 // AWSResolver resolves per-client configuration from AWS Secrets Manager,
@@ -15,7 +15,6 @@ import (
 //
 // Secret naming convention: {env}/{clientID}/{venue}
 type AWSResolver[T any] struct {
-	logger   *zap.Logger
 	env      string
 	venue    string
 	provider pkgsecrets.Provider
@@ -24,14 +23,12 @@ type AWSResolver[T any] struct {
 
 // NewAWSResolver constructs a generic multi-tenant config resolver.
 func NewAWSResolver[T any](
-	logger *zap.Logger,
 	env string,
 	venue string,
 	provider pkgsecrets.Provider,
 	cache *pkgsecrets.Cache[T],
 ) *AWSResolver[T] {
 	return &AWSResolver[T]{
-		logger:   logger,
 		env:      env,
 		venue:    venue,
 		provider: provider,
@@ -64,9 +61,9 @@ func (r *AWSResolver[T]) Resolve(ctx context.Context, clientID string, parse fun
 	secretName := r.secretName(clientID)
 	secretMap, err := r.provider.GetSecret(ctx, secretName)
 	if err != nil {
-		r.logger.Warn("aws.secret_fetch_failed",
-			zap.String("key", secretName),
-			zap.Error(err))
+		slog.Warn("aws.secret_fetch_failed",
+			"key", secretName,
+			"error", err)
 		var zero T
 		return zero, fmt.Errorf("resolve client config for %q: %w", clientID, err)
 	}
@@ -80,9 +77,9 @@ func (r *AWSResolver[T]) Resolve(ctx context.Context, clientID string, parse fun
 	// --- cache locally for next time ---
 	r.cache.Put(key, cfg)
 
-	r.logger.Info("aws.client_config_resolved",
-		zap.String("client", clientID),
-		zap.String("venue", r.venue),
+	slog.Info("aws.client_config_resolved",
+		"client", clientID,
+		"venue", r.venue,
 	)
 	return cfg, nil
 }
@@ -113,9 +110,9 @@ func (r *AWSResolver[T]) DiscoverClients(ctx context.Context) ([]string, error) 
 		}
 	}
 
-	r.logger.Info("aws.clients_discovered",
-		zap.Int("count", len(clients)),
-		zap.Strings("clients", clients),
+	slog.Info("aws.clients_discovered",
+		"count", len(clients),
+		"clients", clients,
 	)
 	return clients, nil
 }

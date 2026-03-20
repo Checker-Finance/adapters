@@ -11,7 +11,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // ─── WSURL ───────────────────────────────────────────────────────────────────
@@ -63,7 +62,7 @@ func (m *mockWSConn) Close() error {
 // ─── WSClient.SendJSON ────────────────────────────────────────────────────────
 
 func TestWSClient_SendJSON_TextMessage(t *testing.T) {
-	client := NewWSClient(zap.NewNop())
+	client := NewWSClient()
 	conn := &mockWSConn{}
 
 	type payload struct {
@@ -82,7 +81,7 @@ func TestWSClient_SendJSON_TextMessage(t *testing.T) {
 }
 
 func TestWSClient_SendJSON_MarshalError(t *testing.T) {
-	client := NewWSClient(zap.NewNop())
+	client := NewWSClient()
 	conn := &mockWSConn{}
 	// channels cannot be marshalled to JSON
 	err := client.SendJSON(conn, make(chan int))
@@ -93,7 +92,7 @@ func TestWSClient_SendJSON_MarshalError(t *testing.T) {
 // ─── WSClient.ReadMessage ─────────────────────────────────────────────────────
 
 func TestWSClient_ReadMessage_Success(t *testing.T) {
-	client := NewWSClient(zap.NewNop())
+	client := NewWSClient()
 	expected := []byte(`{"action":"price_update"}`)
 	conn := &mockWSConn{toRead: [][]byte{expected}}
 
@@ -103,7 +102,7 @@ func TestWSClient_ReadMessage_Success(t *testing.T) {
 }
 
 func TestWSClient_ReadMessage_Error(t *testing.T) {
-	client := NewWSClient(zap.NewNop())
+	client := NewWSClient()
 	conn := &mockWSConn{toRead: [][]byte{}} // no messages
 
 	_, err := client.ReadMessage(conn)
@@ -131,7 +130,7 @@ func TestWSClient_Dial_RealServer(t *testing.T) {
 	// Convert http:// → ws://
 	wsURL := "ws://" + strings.TrimPrefix(srv.URL, "http://") + "/ws"
 
-	client := NewWSClient(zap.NewNop())
+	client := NewWSClient()
 	conn, err := client.Dial(t.Context(), wsURL)
 	require.NoError(t, err)
 	require.NotNil(t, conn)
@@ -144,7 +143,7 @@ func TestWSClient_Dial_RealServer(t *testing.T) {
 }
 
 func TestWSClient_Dial_RefusedConnection(t *testing.T) {
-	client := NewWSClient(zap.NewNop())
+	client := NewWSClient()
 	// Port 1 is always refused
 	_, err := client.Dial(t.Context(), "ws://localhost:1/ws")
 	assert.Error(t, err)

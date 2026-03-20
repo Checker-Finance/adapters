@@ -2,23 +2,22 @@ package braza
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
-	"go.uber.org/zap"
+	"github.com/Checker-Finance/adapters/internal/legacy"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/auth"
-	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/secrets"
+	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/internal/store"
 )
 
 // Poller handles scheduled polling of Braza balances and order/trade status.
 type Poller struct {
-	logger         *zap.Logger
 	cfg            config.Config
 	service        *Service
 	publisher      *publisher.Publisher
@@ -35,7 +34,6 @@ type Poller struct {
 
 // NewPoller constructs a new Braza poller (balances + trade tracking).
 func NewPoller(
-	logger *zap.Logger,
 	cfg config.Config,
 	service *Service,
 	pub *publisher.Publisher,
@@ -47,7 +45,6 @@ func NewPoller(
 	tradeSync *legacy.TradeSyncWriter,
 ) *Poller {
 	return &Poller{
-		logger:         logger,
 		cfg:            cfg,
 		service:        service,
 		publisher:      pub,
@@ -63,8 +60,8 @@ func NewPoller(
 
 // Start begins periodic polling for all known tenant/client pairs.
 func (p *Poller) Start(ctx context.Context, clients []string) {
-	p.logger.Info("braza.poller_started",
-		zap.Int("clients", len(clients)))
+	slog.Info("braza.poller_started",
+		"clients", len(clients))
 
 	// Kick off an immediate balance poll for each client at startup
 	for _, client := range clients {
@@ -87,10 +84,10 @@ func (p *Poller) Start(ctx context.Context, clients []string) {
 				go p.pollBalancesOnce(ctx, client)
 			}
 		case <-ctx.Done():
-			p.logger.Info("braza.poller_stopped (context cancelled)")
+			slog.Info("braza.poller_stopped (context cancelled)")
 			return
 		case <-p.stopCh:
-			p.logger.Info("braza.poller_stopped (manual stop)")
+			slog.Info("braza.poller_stopped (manual stop)")
 			return
 		}
 	}
@@ -106,9 +103,9 @@ func (p *Poller) pollBalancesOnce(ctx context.Context, clientID string) {
 	// Resolve Braza credentials
 	rcreds, err := p.secretProvider.Resolve(ctx, clientID)
 	if err != nil {
-		p.logger.Warn("braza.resolve_failed",
-			zap.String("client", clientID),
-			zap.Error(err))
+		slog.Warn("braza.resolve_failed",
+			"client", clientID,
+			"error", err)
 		return
 	}
 
@@ -119,9 +116,9 @@ func (p *Poller) pollBalancesOnce(ctx context.Context, clientID string) {
 
 	// Fetch and publish balances
 	if err := p.service.FetchAndPublishBalances(ctx, clientID, p.publisher, p.store, authCreds); err != nil {
-		p.logger.Warn("braza.poll_failed",
-			zap.String("client", clientID),
-			zap.Error(err))
+		slog.Warn("braza.poll_failed",
+			"client", clientID,
+			"error", err)
 		return
 	}
 }
@@ -137,9 +134,9 @@ func (p *Poller) PollTradeStatus(
 
 	// Prevent duplicate polling for the same order
 	if _, exists := p.activeTrades.Load(externalOrderID); exists {
-		p.logger.Debug("braza.trade_poll_already_active",
-			zap.String("external_order_id", externalOrderID),
-			zap.String("client", clientID),
+		slog.Debug("braza.trade_poll_already_active",
+			"external_order_id", externalOrderID,
+			"client", clientID,
 		)
 		return
 	}
@@ -162,20 +159,20 @@ func (p *Poller) PollTradeStatus(
 		for {
 			select {
 			case <-ctx.Done():
-				p.logger.Info("braza.trade_poll_stopped",
-					zap.String("external_order_id", externalOrderID),
-					zap.String("client", clientID),
-					zap.String("last_status", lastStatus))
+				slog.Info("braza.trade_poll_stopped",
+					"external_order_id", externalOrderID,
+					"client", clientID,
+					"last_status", lastStatus)
 				return
 
 			case <-ticker.C:
 				// IMPORTANT: use child ctx
 				order, err := p.service.FetchTradeStatus(ctx, clientID, externalOrderID, creds)
 				if err != nil {
-					p.logger.Warn("braza.trade_poll_error",
-						zap.String("external_order_id", externalOrderID),
-						zap.String("client", clientID),
-						zap.Error(err))
+					slog.Warn("braza.trade_poll_error",
+						"external_order_id", externalOrderID,
+						"client", clientID,
+						"error", err)
 					continue
 				}
 
@@ -196,16 +193,16 @@ func (p *Poller) PollTradeStatus(
 
 					subject := "evt.trade.status_changed.v1.BRAZA"
 					if err := p.publisher.Publish(ctx, subject, event); err != nil {
-						p.logger.Debug("nats.publish_failed",
-							zap.String("subject", subject),
-							zap.Error(err))
+						slog.Debug("nats.publish_failed",
+							"subject", subject,
+							"error", err)
 					}
 
-					p.logger.Info("braza.trade_status_changed",
-						zap.String("order_id", orderID),
-						zap.String("client", clientID),
-						zap.String("raw_status", rawStatus),
-						zap.String("normalized_status", status))
+					slog.Info("braza.trade_status_changed",
+						"order_id", orderID,
+						"client", clientID,
+						"raw_status", rawStatus,
+						"normalized_status", status)
 				}
 
 				// --- Terminal Status Handling ---
@@ -216,26 +213,26 @@ func (p *Poller) PollTradeStatus(
 						trade := p.service.BuildTradeConfirmationFromOrder(clientID, orderID, order)
 						if trade != nil {
 							if err := p.tradeSync.SyncTradeUpsert(ctx, trade); err != nil {
-								p.logger.Warn("legacy.trade_sync_failed",
-									zap.String("order_id", trade.TradeID),
-									zap.String("external_order_id", externalOrderID),
-									zap.String("client_id", trade.ClientID),
-									zap.Error(err),
+								slog.Warn("legacy.trade_sync_failed",
+									"order_id", trade.TradeID,
+									"external_order_id", externalOrderID,
+									"client_id", trade.ClientID,
+									"error", err,
 								)
 							} else {
-								p.logger.Info("legacy.trade_sync_upsert",
-									zap.String("order_id", trade.TradeID),
-									zap.String("client_id", trade.ClientID),
-									zap.String("status", trade.Status),
-									zap.String("venue", trade.Venue),
+								slog.Info("legacy.trade_sync_upsert",
+									"order_id", trade.TradeID,
+									"client_id", trade.ClientID,
+									"status", trade.Status,
+									"venue", trade.Venue,
 								)
 							}
 						} else {
-							p.logger.Warn("legacy.trade_sync_skipped",
-								zap.String("order_id", orderID),
-								zap.String("external_order_id", externalOrderID),
-								zap.String("client", clientID),
-								zap.String("reason", "nil_trade_from_braza_status"),
+							slog.Warn("legacy.trade_sync_skipped",
+								"order_id", orderID,
+								"external_order_id", externalOrderID,
+								"client", clientID,
+								"reason", "nil_trade_from_braza_status",
 							)
 						}
 					}
@@ -250,16 +247,16 @@ func (p *Poller) PollTradeStatus(
 						"final":             true,
 						"timestamp":         time.Now().UTC(),
 					}); err != nil {
-						p.logger.Debug("nats.publish_failed",
-							zap.String("subject", finalSubject),
-							zap.Error(err))
+						slog.Debug("nats.publish_failed",
+							"subject", finalSubject,
+							"error", err)
 					}
 
-					p.logger.Info("braza.trade_poll_complete",
-						zap.String("order_id", orderID),
-						zap.String("external_order_id", externalOrderID),
-						zap.String("client", clientID),
-						zap.String("final_status", status))
+					slog.Info("braza.trade_poll_complete",
+						"order_id", orderID,
+						"external_order_id", externalOrderID,
+						"client", clientID,
+						"final_status", status)
 
 					return
 				}

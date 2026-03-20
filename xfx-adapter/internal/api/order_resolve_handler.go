@@ -2,10 +2,10 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/Checker-Finance/adapters/pkg/model"
@@ -24,7 +24,6 @@ type TradeSync interface {
 // OrderResolveHandler resolves order status by quoteId, fetches live status
 // from XFX, and syncs the result to the legacy database.
 type OrderResolveHandler struct {
-	logger    *zap.Logger
 	service   OrderResolverService
 	store     store.Store
 	tradeSync TradeSync
@@ -32,13 +31,11 @@ type OrderResolveHandler struct {
 
 // NewOrderResolveHandler creates a new OrderResolveHandler.
 func NewOrderResolveHandler(
-	logger *zap.Logger,
 	service OrderResolverService,
 	st store.Store,
 	tradeSync TradeSync,
 ) *OrderResolveHandler {
 	return &OrderResolveHandler{
-		logger:    logger,
 		service:   service,
 		store:     st,
 		tradeSync: tradeSync,
@@ -77,19 +74,19 @@ func (h *OrderResolveHandler) ResolveOrder(c *fiber.Ctx) error {
 	// 3. Fetch live status from XFX and map to canonical model.
 	trade, err := h.service.ResolveTransaction(ctx, qrec.ClientID, txID)
 	if err != nil {
-		h.logger.Error("xfx.resolve_order.fetch_failed",
-			zap.String("quote_id", quoteID),
-			zap.String("tx_id", txID),
-			zap.Error(err))
+		slog.Error("xfx.resolve_order.fetch_failed",
+			"quote_id", quoteID,
+			"tx_id", txID,
+			"error", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch status from XFX"})
 	}
 
 	// 4. Sync to legacy database.
 	if err := h.tradeSync.SyncTradeUpsert(ctx, trade); err != nil {
-		h.logger.Warn("xfx.resolve_order.sync_failed",
-			zap.String("quote_id", quoteID),
-			zap.String("tx_id", txID),
-			zap.Error(err))
+		slog.Warn("xfx.resolve_order.sync_failed",
+			"quote_id", quoteID,
+			"tx_id", txID,
+			"error", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"quoteId":    quoteID,
 			"rfqId":      qrec.RFQID,

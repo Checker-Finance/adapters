@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/Checker-Finance/adapters/internal/httpclient"
 	"github.com/Checker-Finance/adapters/internal/rate"
 )
@@ -17,21 +15,19 @@ import (
 // Client wraps HTTP communication with the B2C2 API.
 // A single Client instance serves all tenants; credentials are supplied per-request.
 type Client struct {
-	logger *zap.Logger
-	exec   *httpclient.Executor
+	exec *httpclient.Executor
 }
 
 // NewClient constructs a B2C2 HTTP client.
-func NewClient(logger *zap.Logger, rateMgr *rate.Manager) *Client {
+func NewClient(rateMgr *rate.Manager) *Client {
 	httpClient := &http.Client{Timeout: 30 * time.Second}
-	exec := httpclient.New(logger, rateMgr, httpClient, 2, "b2c2", func(status int, body []byte) error {
+	exec := httpclient.New(rateMgr, httpClient, 2, "b2c2", func(status int, body []byte) error {
 		var errResp ErrorResponse
 		_ = json.Unmarshal(body, &errResp)
 		return fmt.Errorf("b2c2 returned %d: %s", status, string(body))
 	})
 	return &Client{
-		logger: logger,
-		exec:   exec,
+		exec: exec,
 	}
 }
 

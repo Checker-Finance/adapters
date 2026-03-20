@@ -3,28 +3,26 @@ package auth
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
 	"github.com/Checker-Finance/adapters/pkg/secrets"
-	"go.uber.org/zap"
 )
 
 // Manager orchestrates multi-tenant credential lookup and adapter-specific auth.
 type Manager struct {
-	logger    *zap.Logger
 	secrets   secrets.Provider
 	cache     *CacheAdapter
 	brazaAuth *BrazaManager
 }
 
 // NewManager constructs the multi-tenant auth manager.
-func NewManager(secretsProv secrets.Provider, cache *CacheAdapter, logger *zap.Logger, brazaBaseURL string) *Manager {
+func NewManager(secretsProv secrets.Provider, cache *CacheAdapter, brazaBaseURL string) *Manager {
 	return &Manager{
-		logger:    logger,
 		secrets:   secretsProv,
 		cache:     cache,
-		brazaAuth: NewBrazaManager(logger, brazaBaseURL),
+		brazaAuth: NewBrazaManager(brazaBaseURL),
 	}
 }
 
@@ -33,7 +31,7 @@ func (m *Manager) GetCredentials(ctx context.Context, cfg config.Config, clientI
 	key := fmt.Sprintf("%s/%s/%s", cfg.Env, clientID, venue)
 	credsMap, err := m.secrets.GetSecret(ctx, key)
 	if err != nil {
-		m.logger.Warn("failed to fetch credentials", zap.Error(err), zap.String("key", key))
+		slog.Warn("failed to fetch credentials", "error", err, "key", key)
 		return Credentials{}, err
 	}
 	return Credentials{
@@ -54,7 +52,7 @@ func (m *Manager) RefreshAllTokens(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			m.logger.Info("periodic token refresh tick")
+			slog.Info("periodic token refresh tick")
 			// iterate over cached keys, refresh if expiring
 		case <-ctx.Done():
 			return

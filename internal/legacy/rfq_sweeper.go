@@ -2,25 +2,23 @@ package legacy
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.uber.org/zap"
 )
 
 // RFQSweeper periodically expires old RFQs in the legacy table activity.t_request_for_quote.
 type RFQSweeper struct {
 	db       *pgxpool.Pool
-	logger   *zap.Logger
 	interval time.Duration
 	ttl      time.Duration
 }
 
 // NewRFQSweeper creates a new background job for sweeping stale RFQs.
-func NewRFQSweeper(db *pgxpool.Pool, logger *zap.Logger, interval, ttl time.Duration) *RFQSweeper {
+func NewRFQSweeper(db *pgxpool.Pool, interval, ttl time.Duration) *RFQSweeper {
 	return &RFQSweeper{
 		db:       db,
-		logger:   logger,
 		interval: interval,
 		ttl:      ttl,
 	}
@@ -28,9 +26,9 @@ func NewRFQSweeper(db *pgxpool.Pool, logger *zap.Logger, interval, ttl time.Dura
 
 // Start runs the sweep loop until context cancellation.
 func (j *RFQSweeper) Start(ctx context.Context) {
-	j.logger.Info("legacy.rfq_sweeper.start",
-		zap.Duration("interval", j.interval),
-		zap.Duration("ttl", j.ttl),
+	slog.Info("legacy.rfq_sweeper.start",
+		"interval", j.interval,
+		"ttl", j.ttl,
 	)
 
 	ticker := time.NewTicker(j.interval)
@@ -40,10 +38,10 @@ func (j *RFQSweeper) Start(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			if err := j.sweep(ctx); err != nil {
-				j.logger.Warn("legacy.rfq_sweeper.sweep_failed", zap.Error(err))
+				slog.Warn("legacy.rfq_sweeper.sweep_failed", "error", err)
 			}
 		case <-ctx.Done():
-			j.logger.Info("legacy.rfq_sweeper.stopped")
+			slog.Info("legacy.rfq_sweeper.stopped")
 			return
 		}
 	}
@@ -55,8 +53,8 @@ func (j *RFQSweeper) sweep(ctx context.Context) error {
 		return err
 	}
 
-	j.logger.Info("legacy.rfq_sweeper.sweep_complete",
-		zap.Int("expired_items", rfqCount),
+	slog.Info("legacy.rfq_sweeper.sweep_complete",
+		"expired_items", rfqCount,
 	)
 
 	quoteCount, err := j.sweep_(ctx, quoteQuery)
@@ -64,8 +62,8 @@ func (j *RFQSweeper) sweep(ctx context.Context) error {
 		return err
 	}
 
-	j.logger.Info("legacy.quote_sweeper.sweep_complete",
-		zap.Int("expired_items", quoteCount),
+	slog.Info("legacy.quote_sweeper.sweep_complete",
+		"expired_items", quoteCount,
 	)
 
 	return nil

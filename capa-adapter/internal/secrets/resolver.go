@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"go.uber.org/zap"
-
 	"github.com/Checker-Finance/adapters/capa-adapter/internal/capa"
 	"github.com/Checker-Finance/adapters/capa-adapter/pkg/config"
 	intsecrets "github.com/Checker-Finance/adapters/internal/secrets"
@@ -23,12 +21,11 @@ type AWSResolver struct {
 
 // NewAWSResolver constructs a Capa-specific config resolver.
 func NewAWSResolver(
-	logger *zap.Logger,
 	cfg config.Config,
 	provider pkgsecrets.Provider,
 	cache *pkgsecrets.Cache[capa.CapaClientConfig],
 ) *AWSResolver {
-	inner := intsecrets.NewAWSResolver(logger, cfg.Env, "capa", provider, cache)
+	inner := intsecrets.NewAWSResolver(cfg.Env, "capa", provider, cache)
 	return &AWSResolver{inner: inner}
 }
 

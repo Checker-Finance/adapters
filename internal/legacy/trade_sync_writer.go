@@ -2,9 +2,9 @@ package legacy
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/pkg/model"
 )
@@ -12,16 +12,14 @@ import (
 // TradeSyncWriter writes trades into the legacy activity.t_order table.
 type TradeSyncWriter struct {
 	db     *pgxpool.Pool
-	logger *zap.Logger
 	source string
 }
 
 // NewTradeSyncWriter constructs a writer to update the legacy activity.t_order table.
 // source identifies the adapter writing the record (e.g. "rio-adapter", "braza-adapter").
-func NewTradeSyncWriter(db *pgxpool.Pool, logger *zap.Logger, source string) *TradeSyncWriter {
+func NewTradeSyncWriter(db *pgxpool.Pool, source string) *TradeSyncWriter {
 	return &TradeSyncWriter{
 		db:     db,
-		logger: logger,
 		source: source,
 	}
 }
@@ -88,20 +86,20 @@ func (w *TradeSyncWriter) SyncTradeUpsert(ctx context.Context, trade *model.Trad
 		trade.ProviderRFQID,   // s_id_rfq_external
 	)
 	if err != nil {
-		w.logger.Error("legacy.trade_sync_failed",
-			zap.String("trade_id", trade.TradeID),
-			zap.String("client_id", trade.ClientID),
-			zap.Error(err),
+		slog.Error("legacy.trade_sync_failed",
+			"trade_id", trade.TradeID,
+			"client_id", trade.ClientID,
+			"error", err,
 		)
 		return err
 	}
 
-	w.logger.Info("legacy.trade_sync_upsert",
-		zap.String("trade_id", trade.TradeID),
-		zap.String("status", trade.Status),
-		zap.String("client_id", trade.ClientID),
-		zap.String("venue", trade.Venue),
-		zap.Time("executed_at", trade.ExecutedAt),
+	slog.Info("legacy.trade_sync_upsert",
+		"trade_id", trade.TradeID,
+		"status", trade.Status,
+		"client_id", trade.ClientID,
+		"venue", trade.Venue,
+		"executed_at", trade.ExecutedAt,
 	)
 
 	return nil

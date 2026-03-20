@@ -6,12 +6,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-)
+	)
 
 func TestMaster_LoadFromFile(t *testing.T) {
-	logger := zap.NewNop()
-	master := NewMaster(logger)
+	master := NewMaster()
 
 	// Create a temporary file
 	content := `{
@@ -55,8 +53,7 @@ func TestMaster_LoadFromFile(t *testing.T) {
 }
 
 func TestMaster_GetInstrumentID_NotFound(t *testing.T) {
-	logger := zap.NewNop()
-	master := NewMaster(logger)
+	master := NewMaster()
 
 	id, ok := master.GetInstrumentID("UNKNOWN")
 	assert.False(t, ok)
@@ -64,8 +61,7 @@ func TestMaster_GetInstrumentID_NotFound(t *testing.T) {
 }
 
 func TestMaster_GetSymbol_NotFound(t *testing.T) {
-	logger := zap.NewNop()
-	master := NewMaster(logger)
+	master := NewMaster()
 
 	symbol, ok := master.GetSymbol(999)
 	assert.False(t, ok)
@@ -73,8 +69,7 @@ func TestMaster_GetSymbol_NotFound(t *testing.T) {
 }
 
 func TestMaster_AddMapping(t *testing.T) {
-	logger := zap.NewNop()
-	master := NewMaster(logger)
+	master := NewMaster()
 
 	master.AddMapping("BTCUSD", 1)
 
@@ -88,8 +83,7 @@ func TestMaster_AddMapping(t *testing.T) {
 }
 
 func TestMaster_GetAllMappings(t *testing.T) {
-	logger := zap.NewNop()
-	master := NewMaster(logger)
+	master := NewMaster()
 
 	master.AddMapping("BTCUSD", 1)
 	master.AddMapping("ETHUSD", 2)
@@ -101,16 +95,14 @@ func TestMaster_GetAllMappings(t *testing.T) {
 }
 
 func TestMaster_LoadFromFile_FileNotFound(t *testing.T) {
-	logger := zap.NewNop()
-	master := NewMaster(logger)
+	master := NewMaster()
 
 	err := master.LoadFromFile("/nonexistent/file.json")
 	assert.Error(t, err)
 }
 
 func TestMaster_LoadFromFile_InvalidJSON(t *testing.T) {
-	logger := zap.NewNop()
-	master := NewMaster(logger)
+	master := NewMaster()
 
 	// Create a temporary file with invalid JSON
 	tmpFile, err := os.CreateTemp("", "invalid_*.json")

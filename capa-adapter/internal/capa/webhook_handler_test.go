@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"go.uber.org/zap"
 )
 
 func TestValidateWebhookSignature(t *testing.T) {
@@ -67,9 +66,7 @@ func TestValidateWebhookSignature(t *testing.T) {
 
 func TestProcessWebhookEvent_NoSignatureValidation(t *testing.T) {
 	// When resolver is nil, signature validation is skipped.
-	handler := NewWebhookHandler(
-		zap.NewNop(),
-		nil, // publisher
+	handler := NewWebhookHandler(nil, // publisher
 		nil, // store
 		nil, // poller
 		nil, // tradeSync
@@ -101,9 +98,7 @@ func TestProcessWebhookEvent_InvalidSignature(t *testing.T) {
 		WebhookSecret: "test-secret",
 	}}
 
-	handler := NewWebhookHandler(
-		zap.NewNop(),
-		nil, nil, nil, nil, nil,
+	handler := NewWebhookHandler(nil, nil, nil, nil, nil,
 		resolver,
 	)
 
@@ -134,9 +129,7 @@ func TestProcessWebhookEvent_ValidSignature(t *testing.T) {
 		WebhookSecret: secret,
 	}}
 
-	handler := NewWebhookHandler(
-		zap.NewNop(),
-		nil, nil, nil, nil, nil,
+	handler := NewWebhookHandler(nil, nil, nil, nil, nil,
 		resolver,
 	)
 

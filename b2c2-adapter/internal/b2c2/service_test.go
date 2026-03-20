@@ -5,7 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/b2c2-adapter/internal/b2c2"
 )
@@ -90,7 +89,6 @@ func TestHandleRFQCommand_Success(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	_ = zap.NewNop()
 
 	if len(pub.quoteEvents) != 1 {
 		t.Fatalf("expected 1 quote event, got %d", len(pub.quoteEvents))

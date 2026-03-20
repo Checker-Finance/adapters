@@ -2,11 +2,11 @@ package tracking
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/shopspring/decimal"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/kiiex-adapter/internal/order"
 	"github.com/Checker-Finance/adapters/kiiex-adapter/pkg/eventbus"
@@ -18,7 +18,6 @@ type TradeStatusService struct {
 	mu           sync.RWMutex
 	orderService OrderService
 	eventBus     *eventbus.EventBus
-	logger       *zap.Logger
 	pollInterval time.Duration
 	done         chan struct{}
 }
@@ -32,13 +31,11 @@ type OrderService interface {
 func NewTradeStatusService(
 	orderService OrderService,
 	eventBus *eventbus.EventBus,
-	logger *zap.Logger,
 ) *TradeStatusService {
 	s := &TradeStatusService{
 		tradeMap:     make(map[string]order.TradeInfo),
 		orderService: orderService,
 		eventBus:     eventBus,
-		logger:       logger,
 		pollInterval: 5 * time.Minute,
 		done:         make(chan struct{}),
 	}
@@ -79,7 +76,7 @@ func (s *TradeStatusService) subscribeToEvents() {
 }
 
 func (s *TradeStatusService) handleOrderSubmitted(event *order.OrderSubmittedEvent) {
-	s.logger.Info("Order submitted", zap.Any("tradeInfo", event.TradeInfo))
+	slog.Info("Order submitted", "tradeInfo", event.TradeInfo)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -87,7 +84,7 @@ func (s *TradeStatusService) handleOrderSubmitted(event *order.OrderSubmittedEve
 }
 
 func (s *TradeStatusService) handleAttemptedCancel(event *order.AttemptedCancelEvent) {
-	s.logger.Info("Attempted cancel", zap.Int("orderId", event.OrderID))
+	slog.Info("Attempted cancel", "orderId", event.OrderID)
 
 	if event.OrderID != 0 {
 		if tradeID, ok := s.markFilled(event.OrderID); ok {
@@ -99,11 +96,11 @@ func (s *TradeStatusService) handleAttemptedCancel(event *order.AttemptedCancelE
 }
 
 func (s *TradeStatusService) handleFillArrived(event *order.FillArrivedEvent) {
-	s.logger.Info("Fill arrived", zap.Any("event", event))
+	slog.Info("Fill arrived", "event", event)
 
 	quantityLeaves, err := decimal.NewFromString(event.QuantityLeaves)
 	if err != nil {
-		s.logger.Error("Failed to parse quantityLeaves", zap.Error(err))
+		slog.Error("Failed to parse quantityLeaves", "error", err)
 		return
 	}
 
@@ -118,7 +115,7 @@ func (s *TradeStatusService) handleFillArrived(event *order.FillArrivedEvent) {
 }
 
 func (s *TradeStatusService) markFilled(tradeID int) (string, bool) {
-	s.logger.Info("MarkTradeFilled", zap.Int("tradeId", tradeID))
+	slog.Info("MarkTradeFilled", "tradeId", tradeID)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -135,7 +132,7 @@ func (s *TradeStatusService) markFilled(tradeID int) (string, bool) {
 
 // Start starts the polling goroutine
 func (s *TradeStatusService) Start(ctx context.Context) {
-	s.logger.Info("Starting trade status polling", zap.Duration("interval", s.pollInterval))
+	slog.Info("Starting trade status polling", "interval", s.pollInterval)
 
 	ticker := time.NewTicker(s.pollInterval)
 	defer ticker.Stop()
@@ -161,9 +158,9 @@ func (s *TradeStatusService) pollTradeStatuses(ctx context.Context) {
 	s.mu.RUnlock()
 
 	for _, tradeInfo := range trades {
-		s.logger.Info("Requesting status of trade", zap.Any("trade", tradeInfo))
+		slog.Info("Requesting status of trade", "trade", tradeInfo)
 		if err := s.orderService.GetTradeStatus(ctx, tradeInfo); err != nil {
-			s.logger.Error("Failed to get trade status", zap.Error(err))
+			slog.Error("Failed to get trade status", "error", err)
 		}
 	}
 }

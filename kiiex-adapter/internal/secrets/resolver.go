@@ -6,9 +6,8 @@ import (
 	"strconv"
 
 	intsecrets "github.com/Checker-Finance/adapters/internal/secrets"
-	pkgsecrets "github.com/Checker-Finance/adapters/pkg/secrets"
 	"github.com/Checker-Finance/adapters/kiiex-adapter/internal/security"
-	"go.uber.org/zap"
+	pkgsecrets "github.com/Checker-Finance/adapters/pkg/secrets"
 )
 
 // AWSResolver resolves per-client Kiiex configuration from AWS Secrets Manager.
@@ -22,12 +21,11 @@ type AWSResolver struct {
 
 // NewAWSResolver constructs a Kiiex-specific config resolver using AWS Secrets Manager and local cache.
 func NewAWSResolver(
-	logger *zap.Logger,
 	env string,
 	provider pkgsecrets.Provider,
 	cache *pkgsecrets.Cache[security.Auth],
 ) *AWSResolver {
-	inner := intsecrets.NewAWSResolver(logger, env, "kiiex", provider, cache)
+	inner := intsecrets.NewAWSResolver(env, "kiiex", provider, cache)
 	return &AWSResolver{inner: inner}
 }
 

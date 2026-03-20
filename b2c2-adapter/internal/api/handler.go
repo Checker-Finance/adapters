@@ -2,9 +2,9 @@ package api
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/b2c2-adapter/internal/b2c2"
 )
@@ -19,13 +19,12 @@ type B2CService interface {
 
 // B2C2Handler handles HTTP API requests for B2C2 operations.
 type B2C2Handler struct {
-	logger  *zap.Logger
 	service B2CService
 }
 
 // NewB2C2Handler creates a new B2C2Handler.
-func NewB2C2Handler(logger *zap.Logger, service B2CService) *B2C2Handler {
-	return &B2C2Handler{logger: logger, service: service}
+func NewB2C2Handler(service B2CService) *B2C2Handler {
+	return &B2C2Handler{service: service}
 }
 
 // CreateRFQHandler handles POST /api/v1/quotes.
@@ -40,9 +39,9 @@ func (h *B2C2Handler) CreateRFQHandler(c *fiber.Ctx) error {
 
 	resp, err := h.service.CreateRFQ(c.Context(), req.ClientID, req.Pair, req.Side, req.Quantity, req.ID)
 	if err != nil {
-		h.logger.Error("b2c2.create_rfq.failed",
-			zap.String("client", req.ClientID),
-			zap.Error(err))
+		slog.Error("b2c2.create_rfq.failed",
+			"client", req.ClientID,
+			"error", err)
 		return c.Status(fiber.StatusBadRequest).JSON(RFQCreateResponse{
 			QuoteID:  req.ID,
 			ErrorMsg: err.Error(),
@@ -67,17 +66,17 @@ func (h *B2C2Handler) ExecuteOrderHandler(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	h.logger.Info("b2c2.execute_order",
-		zap.String("client", req.ClientID),
-		zap.String("pair", req.Pair),
-		zap.String("rfqId", req.RFQID),
+	slog.Info("b2c2.execute_order",
+		"client", req.ClientID,
+		"pair", req.Pair,
+		"rfqId", req.RFQID,
 	)
 
 	resp, err := h.service.ExecuteRFQ(c.Context(), req.ClientID, req.Pair, req.Side, req.Quantity, req.Price, req.RFQID, req.ClientOrderID)
 	if err != nil {
-		h.logger.Error("b2c2.execute_order.failed",
-			zap.String("client", req.ClientID),
-			zap.Error(err))
+		slog.Error("b2c2.execute_order.failed",
+			"client", req.ClientID,
+			"error", err)
 		return c.Status(fiber.StatusBadRequest).JSON(OrderExecuteResponse{
 			OrderID:  req.OrderID,
 			ErrorMsg: err.Error(),
@@ -106,7 +105,7 @@ func (h *B2C2Handler) GetProductsHandler(c *fiber.Ctx) error {
 
 	instruments, err := h.service.GetProducts(c.Context(), clientID)
 	if err != nil {
-		h.logger.Error("b2c2.get_products.failed", zap.String("client", clientID), zap.Error(err))
+		slog.Error("b2c2.get_products.failed", "client", clientID, "error", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
@@ -125,7 +124,7 @@ func (h *B2C2Handler) GetBalancesHandler(c *fiber.Ctx) error {
 
 	balances, err := h.service.GetBalance(c.Context(), clientID)
 	if err != nil {
-		h.logger.Error("b2c2.get_balances.failed", zap.String("client", clientID), zap.Error(err))
+		slog.Error("b2c2.get_balances.failed", "client", clientID, "error", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 

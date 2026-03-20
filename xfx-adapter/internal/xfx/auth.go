@@ -5,11 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 const (
@@ -27,16 +26,14 @@ type tokenEntry struct {
 // Each client ID maps to a separate cached token derived from its own client_id/client_secret.
 // Auth0 endpoint and audience are taken from the per-client XFXClientConfig.
 type TokenManager struct {
-	logger *zap.Logger
 	client *http.Client
 	mu     sync.Mutex
 	cache  map[string]tokenEntry // clientID → tokenEntry
 }
 
 // NewTokenManager creates a new TokenManager.
-func NewTokenManager(logger *zap.Logger) *TokenManager {
+func NewTokenManager() *TokenManager {
 	return &TokenManager{
-		logger: logger,
 		client: &http.Client{Timeout: 10 * time.Second},
 		cache:  make(map[string]tokenEntry),
 	}
@@ -65,9 +62,9 @@ func (m *TokenManager) GetToken(ctx context.Context, cfg *XFXClientConfig) (stri
 		expiresAt:   time.Now().Add(time.Duration(token.ExpiresIn) * time.Second),
 	}
 
-	m.logger.Info("xfx.auth.token_refreshed",
-		zap.String("client_id", cfg.ClientID),
-		zap.Int64("expires_in_sec", token.ExpiresIn))
+	slog.Info("xfx.auth.token_refreshed",
+		"client_id", cfg.ClientID,
+		"expires_in_sec", token.ExpiresIn)
 
 	return token.AccessToken, nil
 }

@@ -5,11 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/httpclient"
 	"github.com/Checker-Finance/adapters/internal/rate"
@@ -20,23 +19,22 @@ import (
 // Configuration (base URL, credentials) is supplied per-request so that a
 // single Client instance can serve multiple tenants.
 type Client struct {
-	logger  *zap.Logger
-	exec    *httpclient.Executor
-	tokens  *TokenManager
+	exec   *httpclient.Executor
+	tokens *TokenManager
 }
 
 // NewClient constructs a new XFX HTTP client.
-func NewClient(logger *zap.Logger, rateMgr *rate.Manager, tokens *TokenManager) *Client {
+func NewClient(rateMgr *rate.Manager, tokens *TokenManager) *Client {
 	httpClient := &http.Client{Timeout: 30 * time.Second}
-	exec := httpclient.New(logger, rateMgr, httpClient, 2, "xfx", func(status int, body []byte) error {
+	exec := httpclient.New(rateMgr, httpClient, 2, "xfx", func(status int, body []byte) error {
 		var errResp XFXErrorResponse
 		_ = json.Unmarshal(body, &errResp)
 
-		logger.Warn("xfx.client_error",
-			zap.Int("status", status),
-			zap.String("code", errResp.Error.Code),
-			zap.String("message", errResp.Error.Message),
-			zap.String("body", string(body)))
+		slog.Warn("xfx.client_error",
+			"status", status,
+			"code", errResp.Error.Code,
+			"message", errResp.Error.Message,
+			"body", string(body))
 
 		msg := errResp.Error.Message
 		if msg == "" {
@@ -51,7 +49,6 @@ func NewClient(logger *zap.Logger, rateMgr *rate.Manager, tokens *TokenManager) 
 		return fmt.Errorf("xfx returned %d: %s", status, msg)
 	})
 	return &Client{
-		logger: logger,
 		exec:   exec,
 		tokens: tokens,
 	}

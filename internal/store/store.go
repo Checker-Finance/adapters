@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/pkg/model"
 )
@@ -33,9 +33,8 @@ type Store interface {
 }
 
 type HybridStore struct {
-	redis  *redis.Client
-	PG     *pgxpool.Pool
-	logger *zap.Logger
+	redis *redis.Client
+	PG    *pgxpool.Pool
 }
 
 type PGPoolConfig struct {
@@ -48,10 +47,7 @@ type PGPoolConfig struct {
 
 // NewHybrid creates a Redis-first, Postgres-backed store.
 // redisURL must be a valid Redis URL, e.g. redis://localhost:6379 or redis://:password@host:6379/1
-func NewHybrid(redisURL string, pgURL string, pgPoolConfig PGPoolConfig, logger *zap.Logger) (Store, error) {
-	if logger == nil {
-		logger = zap.NewNop()
-	}
+func NewHybrid(redisURL string, pgURL string, pgPoolConfig PGPoolConfig) (Store, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -91,7 +87,7 @@ func NewHybrid(redisURL string, pgURL string, pgPoolConfig PGPoolConfig, logger 
 		}
 	}
 
-	return &HybridStore{redis: rdb, PG: pgPool, logger: logger}, nil
+	return &HybridStore{redis: rdb, PG: pgPool}, nil
 }
 
 func (s *HybridStore) GetClientBalances(ctx context.Context, clientID string) ([]model.Balance, error) {
@@ -135,7 +131,7 @@ func (s *HybridStore) RecordBalanceEvent(ctx context.Context, balance model.Bala
 	`, balance.ClientID, balance.Venue, balance.Instrument,
 		balance.Available, balance.Held, balance.CanBuy, balance.CanSell)
 	if err != nil {
-		s.logger.Error("store.pg.insert_event_failed", zap.Error(err))
+		slog.Error("store.pg.insert_event_failed", "error", err)
 	}
 	return err
 }
@@ -161,7 +157,7 @@ func (s *HybridStore) UpdateBalanceSnapshot(ctx context.Context, balance model.B
 	`, balance.ClientID, balance.Venue, balance.Instrument,
 		balance.Available, balance.Held, balance.CanBuy, balance.CanSell)
 	if err != nil {
-		s.logger.Error("store.pg.snapshot_update_failed", zap.Error(err))
+		slog.Error("store.pg.snapshot_update_failed", "error", err)
 	}
 	return err
 }
@@ -231,7 +227,7 @@ func (s *HybridStore) StoreProduct(ctx context.Context, p model.Product) error {
 	)
 
 	if err != nil {
-		s.logger.Error("store.pg.insert_product_failed", zap.Error(err))
+		slog.Error("store.pg.insert_product_failed", "error", err)
 		return err
 	}
 

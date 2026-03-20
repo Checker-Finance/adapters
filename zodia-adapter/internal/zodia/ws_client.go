@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"go.uber.org/zap"
 )
 
 // WSConn is the interface for a WebSocket connection, enabling mock-based testing.
@@ -37,14 +37,12 @@ func (w *wsConnAdapter) Close() error {
 
 // WSClient provides low-level WebSocket send/receive operations for Zodia.
 type WSClient struct {
-	logger   *zap.Logger
-	dialer   *websocket.Dialer
+	dialer *websocket.Dialer
 }
 
 // NewWSClient constructs a new WSClient.
-func NewWSClient(logger *zap.Logger) *WSClient {
+func NewWSClient() *WSClient {
 	return &WSClient{
-		logger: logger,
 		dialer: &websocket.Dialer{
 			Proxy:            http.ProxyFromEnvironment,
 			HandshakeTimeout: 10 * time.Second,
@@ -60,7 +58,7 @@ func (c *WSClient) Dial(ctx context.Context, url string) (WSConn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("zodia: ws dial %q: %w", url, err)
 	}
-	c.logger.Info("zodia.ws.connected", zap.String("url", url))
+	slog.Info("zodia.ws.connected", "url", url)
 	return &wsConnAdapter{conn: conn}, nil
 }
 

@@ -3,10 +3,9 @@ package instruments
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
-
-	"go.uber.org/zap"
 )
 
 // Master manages symbol to instrument ID mappings
@@ -14,15 +13,13 @@ type Master struct {
 	symbolToInstrumentID map[string]int
 	instrumentIDToSymbol map[int]string
 	mu                   sync.RWMutex
-	logger               *zap.Logger
 }
 
 // NewMaster creates a new instrument master
-func NewMaster(logger *zap.Logger) *Master {
+func NewMaster() *Master {
 	return &Master{
 		symbolToInstrumentID: make(map[string]int),
 		instrumentIDToSymbol: make(map[int]string),
-		logger:               logger,
 	}
 }
 
@@ -46,7 +43,7 @@ func (m *Master) LoadFromFile(path string) error {
 		m.instrumentIDToSymbol[instrumentID] = symbol
 	}
 
-	m.logger.Info("Loaded symbol mappings", zap.Int("count", len(mappings)))
+	slog.Info("Loaded symbol mappings", "count", len(mappings))
 
 	return nil
 }

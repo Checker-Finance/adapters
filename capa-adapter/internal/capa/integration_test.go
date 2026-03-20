@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/rate"
 )
@@ -22,13 +21,12 @@ func TestIntegration_CrossRampQuote(t *testing.T) {
 		t.Skip("CAPA_API_KEY, CAPA_BASE_URL, CAPA_USER_ID env vars required for integration tests")
 	}
 
-	logger, _ := zap.NewDevelopment()
 	rateMgr := rate.NewManager(rate.Config{
 		RequestsPerSecond: 10,
 		Burst:             20,
 		Cooldown:          1 * time.Second,
 	})
-	client := NewClient(logger, rateMgr)
+	client := NewClient(rateMgr)
 
 	cfg := &CapaClientConfig{
 		APIKey:  apiKey,
@@ -72,13 +70,12 @@ func TestIntegration_CrossRampExecute(t *testing.T) {
 		t.Skip("CAPA_API_KEY, CAPA_BASE_URL, CAPA_USER_ID env vars required for integration tests")
 	}
 
-	logger, _ := zap.NewDevelopment()
 	rateMgr := rate.NewManager(rate.Config{
 		RequestsPerSecond: 10,
 		Burst:             20,
 		Cooldown:          1 * time.Second,
 	})
-	client := NewClient(logger, rateMgr)
+	client := NewClient(rateMgr)
 
 	cfg := &CapaClientConfig{
 		APIKey:  apiKey,

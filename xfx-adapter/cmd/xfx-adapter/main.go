@@ -3,23 +3,24 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/Checker-Finance/adapters/xfx-adapter/internal/api"
 	"github.com/Checker-Finance/adapters/internal/jobs"
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/internal/rate"
-	"github.com/Checker-Finance/adapters/xfx-adapter/internal/xfx"
-	internalsecrets "github.com/Checker-Finance/adapters/xfx-adapter/internal/secrets"
 	"github.com/Checker-Finance/adapters/internal/store"
-	"github.com/Checker-Finance/adapters/xfx-adapter/pkg/config"
 	"github.com/Checker-Finance/adapters/pkg/logger"
 	"github.com/Checker-Finance/adapters/pkg/secrets"
 	"github.com/Checker-Finance/adapters/pkg/utils"
+	"github.com/Checker-Finance/adapters/xfx-adapter/internal/api"
+	internalsecrets "github.com/Checker-Finance/adapters/xfx-adapter/internal/secrets"
+	"github.com/Checker-Finance/adapters/xfx-adapter/internal/xfx"
+	"github.com/Checker-Finance/adapters/xfx-adapter/pkg/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/nats-io/nats.go"
 )
@@ -34,14 +35,14 @@ func main() {
 	cfg.Venue = "xfx"
 
 	logger.Init(cfg.ServiceName, cfg.Env, cfg.LogLevel)
-	logg := logger.S()
-	logg.Info("starting [xfx-adapter]...")
-	logg.Info("connection to DSN: ", utils.MaskDSN(cfg.DatabaseURL))
+	slog.Info("starting [xfx-adapter]...")
+	slog.Info("connection to DSN", "dsn", utils.MaskDSN(cfg.DatabaseURL))
 
 	// --- AWS Secrets Manager provider ---
 	awsProvider, err := secrets.NewAWSProvider(cfg.AWSRegion)
 	if err != nil {
-		logg.Fatalw("failed to create AWS Secrets Manager provider", "error", err)
+		slog.Error("failed to create AWS Secrets Manager provider", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Per-client config resolver (secrets cached in-memory) ---
@@ -50,7 +51,6 @@ func main() {
 	go configCache.StartCleaner(cfg.CleanupFreq, stopCleaner)
 
 	resolver := internalsecrets.NewAWSResolver(
-		logg.Desugar(),
 		*cfg,
 		awsProvider,
 		configCache,
@@ -59,21 +59,23 @@ func main() {
 	// --- Discover configured clients ---
 	clients, err := resolver.DiscoverClients(ctx)
 	if err != nil {
-		logg.Warnw("failed to discover clients from AWS Secrets Manager", "error", err)
+		slog.Warn("failed to discover clients from AWS Secrets Manager", "error", err)
 	} else {
-		logg.Infow("discovered XFX clients", "count", len(clients), "clients", clients)
+		slog.Info("discovered XFX clients", "count", len(clients), "clients", clients)
 	}
 
 	// --- Connect to NATS ---
 	nc, err := nats.Connect(cfg.NATSURL)
 	if err != nil {
-		logg.Fatalw("failed to connect to NATS", "error", err)
+		slog.Error("failed to connect to NATS", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Publisher ---
 	pub, err := publisher.New(nc, "evt.xfx", "XFX_EVENTS")
 	if err != nil {
-		logg.Fatalw("failed to init publisher", "error", err)
+		slog.Error("failed to init publisher", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Rate limiter ---
@@ -90,18 +92,18 @@ func main() {
 		MaxConnLifetime:   cfg.PGMaxConnLifetime,
 		MaxConnIdleTime:   cfg.PGMaxConnIdleTime,
 		HealthCheckPeriod: cfg.PGHealthCheckPeriod,
-	}, logg.Desugar())
+	})
 	if err != nil {
-		logg.Fatalw("failed to init store", "error", err)
+		slog.Error("failed to init store", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Legacy trade sync writer ---
-	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, logger.L(), "xfx-adapter")
+	tradeSyncWriter := legacy.NewTradeSyncWriter(st.(*store.HybridStore).PG, "xfx-adapter")
 
 	// --- RFQ sweeper: expires stale open RFQs and quotes in the legacy DB ---
 	rfqSweeper := legacy.NewRFQSweeper(
 		st.(*store.HybridStore).PG,
-		logger.L(),
 		cfg.RFQSweepInterval,
 		cfg.RFQSweepTTL,
 	)
@@ -109,7 +111,6 @@ func main() {
 
 	// --- Summary refresher: nightly balance materialized view refresh ---
 	refresher := jobs.NewSummaryRefresher(
-		logg.Desugar(),
 		nc,
 		st.(*store.HybridStore).PG,
 		pub,
@@ -118,16 +119,15 @@ func main() {
 	go refresher.Start(ctx)
 
 	// --- XFX Auth token manager ---
-	tokenMgr := xfx.NewTokenManager(logg.Desugar())
+	tokenMgr := xfx.NewTokenManager()
 
 	// --- XFX HTTP client ---
-	xfxClient := xfx.NewClient(logg.Desugar(), rateMgr, tokenMgr)
+	xfxClient := xfx.NewClient(rateMgr, tokenMgr)
 
 	// --- XFX Service ---
 	xfxSvc := xfx.NewService(
 		ctx,
 		*cfg,
-		logg.Desugar(),
 		nc,
 		xfxClient,
 		resolver,
@@ -138,7 +138,6 @@ func main() {
 
 	// --- XFX Poller ---
 	poller := xfx.NewPoller(
-		logg.Desugar(),
 		*cfg,
 		xfxSvc,
 		pub,
@@ -149,9 +148,10 @@ func main() {
 	xfxSvc.SetPoller(poller)
 
 	// --- NATS command consumer: quote requests and trade execute commands ---
-	cmdConsumer := xfx.NewCommandConsumer(nc, xfxSvc, logg.Desugar())
+	cmdConsumer := xfx.NewCommandConsumer(nc, xfxSvc)
 	if err := cmdConsumer.Subscribe(ctx, cfg.InboundSubject, cfg.TradeExecuteSubject); err != nil {
-		logg.Fatalw("failed to subscribe to NATS command subjects", "error", err)
+		slog.Error("failed to subscribe to NATS command subjects", "error", err)
+		os.Exit(1)
 	}
 
 	// --- Fiber HTTP Server ---
@@ -163,29 +163,30 @@ func main() {
 	})
 
 	clientValidator := api.NewResolverValidator(resolver)
-	xfxHandler := api.NewXFXHandler(logg.Desugar(), xfxSvc, clientValidator)
-	resolveHandler := api.NewOrderResolveHandler(logg.Desugar(), xfxSvc, st, tradeSyncWriter)
+	xfxHandler := api.NewXFXHandler(xfxSvc, clientValidator)
+	resolveHandler := api.NewOrderResolveHandler(xfxSvc, st, tradeSyncWriter)
 	productsHandler := api.NewProductsHandler(xfxSvc)
-	balanceHandler := api.NewBalanceHandler(st, logg.Desugar())
+	balanceHandler := api.NewBalanceHandler(st)
 
 	api.RegisterRoutes(app, nc, st, xfxHandler, resolveHandler, productsHandler, balanceHandler)
 
 	// Start HTTP server
 	go func() {
-		logg.Infof("HTTP API listening on :%d", cfg.Port)
+		slog.Info("HTTP API listening", "port", cfg.Port)
 		if err := app.Listen(fmt.Sprintf(":%d", cfg.Port)); err != nil {
-			logg.Fatalw("fiber.listen_failed", "error", err)
+			slog.Error("fiber.listen_failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
-	logg.Infow("[xfx-adapter] running",
+	slog.Info("[xfx-adapter] running",
 		"nats", cfg.NATSURL,
 		"env", cfg.Env,
 		"poll_interval", cfg.XFXPollInterval,
 		"discovered_clients", len(clients))
 
 	<-ctx.Done()
-	logg.Info("shutting down [xfx-adapter]...")
+	slog.Info("shutting down [xfx-adapter]...")
 
 	close(stopCleaner)
 	cmdConsumer.Drain()
@@ -193,13 +194,12 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
-		logg.Warnw("fiber.shutdown_failed", "error", err)
+		slog.Warn("fiber.shutdown_failed", "error", err)
 	}
 	if err := nc.Drain(); err != nil {
-		logg.Warnw("nats.drain_failed", "error", err)
+		slog.Warn("nats.drain_failed", "error", err)
 	}
 	if err := st.Close(); err != nil {
-		logg.Warnw("store.close_failed", "error", err)
+		slog.Warn("store.close_failed", "error", err)
 	}
 }
-

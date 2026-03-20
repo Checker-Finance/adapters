@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/zodia-adapter/internal/metrics"
 )
@@ -43,7 +43,6 @@ type Session struct {
 	cfg      SessionConfig
 	wsClient *WSClient
 	tokenMgr *WSTokenManager
-	logger   *zap.Logger
 
 	mu        sync.Mutex
 	conn      WSConn
@@ -55,12 +54,11 @@ type Session struct {
 }
 
 // NewSession constructs a new Session (not yet connected).
-func NewSession(cfg SessionConfig, wsClient *WSClient, tokenMgr *WSTokenManager, logger *zap.Logger) *Session {
+func NewSession(cfg SessionConfig, wsClient *WSClient, tokenMgr *WSTokenManager) *Session {
 	return &Session{
 		cfg:      cfg,
 		wsClient: wsClient,
 		tokenMgr: tokenMgr,
-		logger:   logger,
 	}
 }
 
@@ -113,9 +111,9 @@ func (s *Session) connect(ctx context.Context) error {
 
 	s.conn = conn
 	s.connected.Store(true)
-	s.logger.Info("zodia.session.connected",
-		zap.String("client_id", s.cfg.ClientID),
-		zap.String("url", wsURL))
+	slog.Info("zodia.session.connected",
+		"client_id", s.cfg.ClientID,
+		"url", wsURL)
 
 	// Start read loop in background
 	go s.readLoop(ctx)
@@ -126,7 +124,7 @@ func (s *Session) connect(ctx context.Context) error {
 // readLoop continuously reads messages from the WebSocket and dispatches them
 // to pending request channels. Triggers reconnection on connection errors.
 func (s *Session) readLoop(ctx context.Context) {
-	s.logger.Debug("zodia.session.read_loop_started", zap.String("client_id", s.cfg.ClientID))
+	slog.Debug("zodia.session.read_loop_started", "client_id", s.cfg.ClientID)
 	for {
 		if !s.connected.Load() {
 			return
@@ -137,9 +135,9 @@ func (s *Session) readLoop(ctx context.Context) {
 			if !s.connected.Load() {
 				return
 			}
-			s.logger.Error("zodia.session.read_error",
-				zap.String("client_id", s.cfg.ClientID),
-				zap.Error(err))
+			slog.Error("zodia.session.read_error",
+				"client_id", s.cfg.ClientID,
+				"error", err)
 			s.connected.Store(false)
 			go s.reconnectWithBackoff(ctx)
 			return
@@ -153,7 +151,7 @@ func (s *Session) readLoop(ctx context.Context) {
 func (s *Session) dispatch(raw []byte) {
 	var msg WSMessage
 	if err := json.Unmarshal(raw, &msg); err != nil {
-		s.logger.Warn("zodia.session.dispatch_parse_failed", zap.Error(err))
+		slog.Warn("zodia.session.dispatch_parse_failed", "error", err)
 		return
 	}
 
@@ -161,7 +159,7 @@ func (s *Session) dispatch(raw []byte) {
 	case "price_update":
 		var payload WSPricePayload
 		if err := json.Unmarshal(raw, &payload); err != nil {
-			s.logger.Warn("zodia.session.price_parse_failed", zap.Error(err))
+			slog.Warn("zodia.session.price_parse_failed", "error", err)
 			return
 		}
 		if ch, ok := s.pendingPrices.Load(payload.ClientRef); ok {
@@ -171,7 +169,7 @@ func (s *Session) dispatch(raw []byte) {
 	case "order_confirmation":
 		var payload WSOrderConfirmPayload
 		if err := json.Unmarshal(raw, &payload); err != nil {
-			s.logger.Warn("zodia.session.order_parse_failed", zap.Error(err))
+			slog.Warn("zodia.session.order_parse_failed", "error", err)
 			return
 		}
 		if ch, ok := s.pendingOrders.Load(payload.ClientRef); ok {
@@ -181,13 +179,13 @@ func (s *Session) dispatch(raw []byte) {
 	case "error":
 		var payload WSErrorPayload
 		if err := json.Unmarshal(raw, &payload); err != nil {
-			s.logger.Warn("zodia.session.error_parse_failed", zap.Error(err))
+			slog.Warn("zodia.session.error_parse_failed", "error", err)
 			return
 		}
-		s.logger.Warn("zodia.session.ws_error",
-			zap.String("client_id", s.cfg.ClientID),
-			zap.String("code", payload.Code),
-			zap.String("message", payload.Message))
+		slog.Warn("zodia.session.ws_error",
+			"client_id", s.cfg.ClientID,
+			"code", payload.Code,
+			"message", payload.Message)
 
 		errMsg := fmt.Errorf("zodia ws error: %s", payload.Message)
 		if payload.ClientRef != "" {
@@ -200,9 +198,9 @@ func (s *Session) dispatch(raw []byte) {
 		}
 
 	default:
-		s.logger.Debug("zodia.session.unknown_action",
-			zap.String("action", msg.Action),
-			zap.String("client_id", s.cfg.ClientID))
+		slog.Debug("zodia.session.unknown_action",
+			"action", msg.Action,
+			"client_id", s.cfg.ClientID)
 	}
 }
 
@@ -214,40 +212,40 @@ func (s *Session) reconnectWithBackoff(ctx context.Context) {
 	for i := 0; i < s.cfg.MaxRetries; i++ {
 		select {
 		case <-ctx.Done():
-			s.logger.Info("zodia.session.reconnect_cancelled",
-				zap.String("client_id", s.cfg.ClientID))
+			slog.Info("zodia.session.reconnect_cancelled",
+				"client_id", s.cfg.ClientID)
 			return
 		case <-time.After(delay):
 		}
 
-		s.logger.Info("zodia.session.reconnecting",
-			zap.String("client_id", s.cfg.ClientID),
-			zap.Int("attempt", i+1),
-			zap.Duration("delay", delay))
+		slog.Info("zodia.session.reconnecting",
+			"client_id", s.cfg.ClientID,
+			"attempt", i+1,
+			"delay", delay)
 
 		s.mu.Lock()
 		err := s.connect(ctx)
 		s.mu.Unlock()
 
 		if err != nil {
-			s.logger.Error("zodia.session.reconnect_failed",
-				zap.String("client_id", s.cfg.ClientID),
-				zap.Int("attempt", i+1),
-				zap.Error(err))
+			slog.Error("zodia.session.reconnect_failed",
+				"client_id", s.cfg.ClientID,
+				"attempt", i+1,
+				"error", err)
 			delay = min(delay*2, maxDelay)
 			continue
 		}
 
 		metrics.IncWSReconnect(s.cfg.ClientID)
-		s.logger.Info("zodia.session.reconnected",
-			zap.String("client_id", s.cfg.ClientID),
-			zap.Int("attempts", i+1))
+		slog.Info("zodia.session.reconnected",
+			"client_id", s.cfg.ClientID,
+			"attempts", i+1)
 		return
 	}
 
-	s.logger.Error("zodia.session.max_retries_exceeded",
-		zap.String("client_id", s.cfg.ClientID),
-		zap.Int("max_retries", s.cfg.MaxRetries))
+	slog.Error("zodia.session.max_retries_exceeded",
+		"client_id", s.cfg.ClientID,
+		"max_retries", s.cfg.MaxRetries)
 }
 
 // RequestPrice sends a subscribe_price message and waits for the price_update response.
@@ -350,17 +348,15 @@ type SessionManager struct {
 	sessions   map[string]*Session
 	wsClient   *WSClient
 	tokenMgr   *WSTokenManager
-	logger     *zap.Logger
 	maxRetries int
 }
 
 // NewSessionManager constructs a new SessionManager.
-func NewSessionManager(logger *zap.Logger, wsClient *WSClient, tokenMgr *WSTokenManager, maxRetries int) *SessionManager {
+func NewSessionManager(wsClient *WSClient, tokenMgr *WSTokenManager, maxRetries int) *SessionManager {
 	return &SessionManager{
 		sessions:   make(map[string]*Session),
 		wsClient:   wsClient,
 		tokenMgr:   tokenMgr,
-		logger:     logger,
 		maxRetries: maxRetries,
 	}
 }
@@ -379,7 +375,7 @@ func (m *SessionManager) GetOrCreate(ctx context.Context, clientID string, cfg *
 		ZodiaCfg:   cfg,
 		MaxRetries: m.maxRetries,
 		RetryDelay: time.Second,
-	}, m.wsClient, m.tokenMgr, m.logger)
+	}, m.wsClient, m.tokenMgr)
 
 	if err := sess.Connect(ctx); err != nil {
 		return nil, fmt.Errorf("zodia.session_manager.connect: %w", err)

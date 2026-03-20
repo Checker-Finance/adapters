@@ -13,16 +13,16 @@ import (
 
 // Config holds the runtime configuration for the xfx-adapter.
 type Config struct {
-	ServiceName  string
-	Env          string
-	Venue        string
-	DatabaseURL  string
-	PollInterval time.Duration
-	NATSURL      string
-	RedisURL     string // e.g. redis://localhost:6379 or redis://:pass@host:6379/1
-	AWSRegion    string
-	LogLevel     string
-	Port         int
+	ServiceName      string
+	Env              string
+	Venue            string
+	DatabaseURL      string
+	PollInterval     time.Duration
+	NATSURL          string
+	RedisURL         string // e.g. redis://localhost:6379 or redis://:pass@host:6379/1
+	AWSRegion        string
+	LogLevel         string
+	Port             int
 	HTTPReadTimeout  time.Duration
 	HTTPWriteTimeout time.Duration
 	HTTPIdleTimeout  time.Duration
@@ -56,30 +56,30 @@ func Load(ctx context.Context) *Config {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		ServiceName:         pkgconfig.GetEnv("SERVICE_NAME", "xfx-adapter"),
-		Venue:               "xfx",
-		Env:                 pkgconfig.GetEnv("ENV", "dev"),
-		DatabaseURL:         pkgconfig.GetEnv("DATABASE_URL", "postgres://checker:checker@localhost/db_checker?sslmode=disable"),
-		PollInterval:        pkgconfig.GetEnvDuration("POLL_INTERVAL", 5*time.Minute),
-		NATSURL:             pkgconfig.GetEnv("NATS_URL", "nats://localhost:4222"),
-		RedisURL:            pkgconfig.GetEnv("REDIS_URL", "redis://localhost:6379"),
-		AWSRegion:           pkgconfig.GetEnv("AWS_REGION", "us-east-2"),
-		LogLevel:            pkgconfig.GetEnv("LOG_LEVEL", "info"),
-		Port:                pkgconfig.GetEnvInt("XFX_PORT", 9030),
-		HTTPReadTimeout:     pkgconfig.GetEnvDuration("HTTP_READ_TIMEOUT", 10*time.Second),
-		HTTPWriteTimeout:    pkgconfig.GetEnvDuration("HTTP_WRITE_TIMEOUT", 10*time.Second),
-		HTTPIdleTimeout:     pkgconfig.GetEnvDuration("HTTP_IDLE_TIMEOUT", 60*time.Second),
-		HTTPBodyLimit:       pkgconfig.GetEnvInt("HTTP_BODY_LIMIT", 1*1024*1024),
-		CacheTTL:            pkgconfig.GetEnvDuration("CACHE_TTL", 24*time.Hour),
-		CleanupFreq:         pkgconfig.GetEnvDuration("CACHE_CLEANUP_FREQ", 10*time.Minute),
-		InboundSubject:      pkgconfig.GetEnv("INBOUND_SUBJECT", "cmd.lp.quote_request.v1.XFX"),
-		OutboundSubject:     pkgconfig.GetEnv("OUTBOUND_SUBJECT", "evt.lp.quote_response.v1.XFX"),
-		TradeExecuteSubject: pkgconfig.GetEnv("TRADE_EXECUTE_SUBJECT", "cmd.lp.trade_execute.v1.XFX"),
-		PGMaxConns:          pkgconfig.GetEnvInt("PG_MAX_CONNS", 10),
-		PGMinConns:          pkgconfig.GetEnvInt("PG_MIN_CONNS", 2),
-		PGMaxConnLifetime:   pkgconfig.GetEnvDuration("PG_MAX_CONN_LIFETIME", 30*time.Minute),
-		PGMaxConnIdleTime:   pkgconfig.GetEnvDuration("PG_MAX_CONN_IDLE_TIME", 5*time.Minute),
-		PGHealthCheckPeriod: pkgconfig.GetEnvDuration("PG_HEALTH_CHECK_PERIOD", 1*time.Minute),
+		ServiceName:            pkgconfig.GetEnv("SERVICE_NAME", "xfx-adapter"),
+		Venue:                  "xfx",
+		Env:                    pkgconfig.GetEnv("ENV", "dev"),
+		DatabaseURL:            pkgconfig.GetEnv("DATABASE_URL", "postgres://checker:checker@localhost/db_checker?sslmode=disable"),
+		PollInterval:           pkgconfig.GetEnvDuration("POLL_INTERVAL", 5*time.Minute),
+		NATSURL:                pkgconfig.GetEnv("NATS_URL", "nats://localhost:4222"),
+		RedisURL:               pkgconfig.GetEnv("REDIS_URL", "redis://localhost:6379"),
+		AWSRegion:              pkgconfig.GetEnv("AWS_REGION", "us-east-2"),
+		LogLevel:               pkgconfig.GetEnv("LOG_LEVEL", "info"),
+		Port:                   pkgconfig.GetEnvInt("XFX_PORT", 9030),
+		HTTPReadTimeout:        pkgconfig.GetEnvDuration("HTTP_READ_TIMEOUT", 10*time.Second),
+		HTTPWriteTimeout:       pkgconfig.GetEnvDuration("HTTP_WRITE_TIMEOUT", 10*time.Second),
+		HTTPIdleTimeout:        pkgconfig.GetEnvDuration("HTTP_IDLE_TIMEOUT", 60*time.Second),
+		HTTPBodyLimit:          pkgconfig.GetEnvInt("HTTP_BODY_LIMIT", 1*1024*1024),
+		CacheTTL:               pkgconfig.GetEnvDuration("CACHE_TTL", 24*time.Hour),
+		CleanupFreq:            pkgconfig.GetEnvDuration("CACHE_CLEANUP_FREQ", 10*time.Minute),
+		InboundSubject:         pkgconfig.GetEnv("INBOUND_SUBJECT", "cmd.lp.quote_request.v1.XFX"),
+		OutboundSubject:        pkgconfig.GetEnv("OUTBOUND_SUBJECT", "evt.lp.quote_response.v1.XFX"),
+		TradeExecuteSubject:    pkgconfig.GetEnv("TRADE_EXECUTE_SUBJECT", "cmd.lp.trade_execute.v1.XFX"),
+		PGMaxConns:             pkgconfig.GetEnvInt("PG_MAX_CONNS", 10),
+		PGMinConns:             pkgconfig.GetEnvInt("PG_MIN_CONNS", 2),
+		PGMaxConnLifetime:      pkgconfig.GetEnvDuration("PG_MAX_CONN_LIFETIME", 30*time.Minute),
+		PGMaxConnIdleTime:      pkgconfig.GetEnvDuration("PG_MAX_CONN_IDLE_TIME", 5*time.Minute),
+		PGHealthCheckPeriod:    pkgconfig.GetEnvDuration("PG_HEALTH_CHECK_PERIOD", 1*time.Minute),
 		XFXPollInterval:        pkgconfig.GetEnvDuration("XFX_POLL_INTERVAL", 15*time.Second),
 		RFQSweepInterval:       pkgconfig.GetEnvDuration("RFQ_SWEEP_INTERVAL", 5*time.Minute),
 		RFQSweepTTL:            pkgconfig.GetEnvDuration("RFQ_SWEEP_TTL", 15*time.Minute),

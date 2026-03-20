@@ -2,11 +2,10 @@ package rio
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
@@ -17,7 +16,6 @@ import (
 // Poller handles scheduled polling of Rio order/trade status.
 // Used as a fallback when webhooks are not available or miss events.
 type Poller struct {
-	logger       *zap.Logger
 	cfg          config.Config
 	service      *Service
 	publisher    *publisher.Publisher
@@ -31,7 +29,6 @@ type Poller struct {
 
 // NewPoller constructs a new Rio poller for trade status tracking.
 func NewPoller(
-	logger *zap.Logger,
 	cfg config.Config,
 	service *Service,
 	pub *publisher.Publisher,
@@ -40,7 +37,6 @@ func NewPoller(
 	tradeSync *legacy.TradeSyncWriter,
 ) *Poller {
 	return &Poller{
-		logger:       logger,
 		cfg:          cfg,
 		service:      service,
 		publisher:    pub,
@@ -66,9 +62,9 @@ func (p *Poller) PollTradeStatus(
 ) {
 	// Prevent duplicate polling for the same order
 	if _, exists := p.activeTrades.Load(orderID); exists {
-		p.logger.Debug("rio.trade_poll_already_active",
-			zap.String("order_id", orderID),
-			zap.String("client", clientID),
+		slog.Debug("rio.trade_poll_already_active",
+			"order_id", orderID,
+			"client", clientID,
 		)
 		return
 	}
@@ -92,25 +88,25 @@ func (p *Poller) PollTradeStatus(
 		for {
 			select {
 			case <-ctx.Done():
-				p.logger.Info("rio.trade_poll_stopped",
-					zap.String("order_id", orderID),
-					zap.String("client", clientID),
-					zap.String("last_status", lastStatus))
+				slog.Info("rio.trade_poll_stopped",
+					"order_id", orderID,
+					"client", clientID,
+					"last_status", lastStatus)
 				return
 
 			case <-p.stopCh:
-				p.logger.Info("rio.trade_poll_stopped",
-					zap.String("order_id", orderID),
-					zap.String("reason", "poller_shutdown"))
+				slog.Info("rio.trade_poll_stopped",
+					"order_id", orderID,
+					"reason", "poller_shutdown")
 				return
 
 			case <-ticker.C:
 				order, err := p.service.FetchTradeStatus(ctx, clientID, orderID)
 				if err != nil {
-					p.logger.Warn("rio.trade_poll_error",
-						zap.String("order_id", orderID),
-						zap.String("client", clientID),
-						zap.Error(err))
+					slog.Warn("rio.trade_poll_error",
+						"order_id", orderID,
+						"client", clientID,
+						"error", err)
 					continue
 				}
 
@@ -133,17 +129,17 @@ func (p *Poller) PollTradeStatus(
 
 						subject := "evt.trade.status_changed.v1.RIO"
 						if err := p.publisher.Publish(ctx, subject, event); err != nil {
-							p.logger.Debug("nats.publish_failed",
-								zap.String("subject", subject),
-								zap.Error(err))
+							slog.Debug("nats.publish_failed",
+								"subject", subject,
+								"error", err)
 						}
 					}
 
-					p.logger.Info("rio.trade_status_changed",
-						zap.String("order_id", orderID),
-						zap.String("client", clientID),
-						zap.String("raw_status", rawStatus),
-						zap.String("normalized_status", status))
+					slog.Info("rio.trade_status_changed",
+						"order_id", orderID,
+						"client", clientID,
+						"raw_status", rawStatus,
+						"normalized_status", status)
 				}
 
 				// Handle terminal status
@@ -160,8 +156,8 @@ func (p *Poller) PollTradeStatus(
 // Called by webhook handler when it receives a status update.
 func (p *Poller) CancelPolling(orderID string) {
 	if cancel, ok := p.activeTrades.Load(orderID); ok {
-		p.logger.Info("rio.polling_cancelled_by_webhook",
-			zap.String("order_id", orderID))
+		slog.Info("rio.polling_cancelled_by_webhook",
+			"order_id", orderID)
 		cancel.(context.CancelFunc)()
 		p.activeTrades.Delete(orderID)
 	}
@@ -187,16 +183,16 @@ func (p *Poller) handleTerminalStatus(
 		trade := p.service.BuildTradeConfirmationFromOrder(clientID, orderID, order)
 		if trade != nil {
 			if err := p.tradeSync.SyncTradeUpsert(ctx, trade); err != nil {
-				p.logger.Warn("legacy.trade_sync_failed",
-					zap.String("order_id", orderID),
-					zap.String("client", clientID),
-					zap.Error(err))
+				slog.Warn("legacy.trade_sync_failed",
+					"order_id", orderID,
+					"client", clientID,
+					"error", err)
 			} else {
-				p.logger.Info("legacy.trade_sync_upsert",
-					zap.String("order_id", orderID),
-					zap.String("client", clientID),
-					zap.String("status", trade.Status),
-					zap.String("venue", trade.Venue))
+				slog.Info("legacy.trade_sync_upsert",
+					"order_id", orderID,
+					"client", clientID,
+					"status", trade.Status,
+					"venue", trade.Venue)
 			}
 		}
 	}
@@ -212,14 +208,14 @@ func (p *Poller) handleTerminalStatus(
 			"final":     true,
 			"timestamp": time.Now().UTC(),
 		}); err != nil {
-			p.logger.Debug("nats.publish_failed",
-				zap.String("subject", finalSubject),
-				zap.Error(err))
+			slog.Debug("nats.publish_failed",
+				"subject", finalSubject,
+				"error", err)
 		}
 	}
 
-	p.logger.Info("rio.trade_poll_complete",
-		zap.String("order_id", orderID),
-		zap.String("client", clientID),
-		zap.String("final_status", status))
+	slog.Info("rio.trade_poll_complete",
+		"order_id", orderID,
+		"client", clientID,
+		"final_status", status)
 }

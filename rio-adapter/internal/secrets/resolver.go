@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	intsecrets "github.com/Checker-Finance/adapters/internal/secrets"
+	pkgsecrets "github.com/Checker-Finance/adapters/pkg/secrets"
 	"github.com/Checker-Finance/adapters/rio-adapter/internal/rio"
 	"github.com/Checker-Finance/adapters/rio-adapter/pkg/config"
-	pkgsecrets "github.com/Checker-Finance/adapters/pkg/secrets"
-	intsecrets "github.com/Checker-Finance/adapters/internal/secrets"
-	"go.uber.org/zap"
 )
 
 // AWSResolver resolves per-client Rio configuration from AWS Secrets Manager.
@@ -22,12 +21,11 @@ type AWSResolver struct {
 
 // NewAWSResolver constructs a Rio-specific config resolver using AWS Secrets Manager and local cache.
 func NewAWSResolver(
-	logger *zap.Logger,
 	cfg config.Config,
 	provider pkgsecrets.Provider,
 	cache *pkgsecrets.Cache[rio.RioClientConfig],
 ) *AWSResolver {
-	inner := intsecrets.NewAWSResolver(logger, cfg.Env, "rio", provider, cache)
+	inner := intsecrets.NewAWSResolver(cfg.Env, "rio", provider, cache)
 	return &AWSResolver{inner: inner}
 }
 

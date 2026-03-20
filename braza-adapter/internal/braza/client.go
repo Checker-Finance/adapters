@@ -5,10 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/internal/httpclient"
 	"github.com/Checker-Finance/adapters/internal/rate"
@@ -17,23 +16,21 @@ import (
 // Client wraps low-level HTTP communication with Braza's API.
 // It handles JWT authorization, rate limiting, and basic retry logic.
 type Client struct {
-	logger  *zap.Logger
 	baseURL string
 	token   string
 	exec    *httpclient.Executor
 }
 
 // NewClient constructs a new Braza HTTP client instance.
-func NewClient(logger *zap.Logger, baseURL, token string, rateMgr *rate.Manager) *Client {
+func NewClient(baseURL, token string, rateMgr *rate.Manager) *Client {
 	httpClient := &http.Client{Timeout: 10 * time.Second}
-	exec := httpclient.New(logger, rateMgr, httpClient, 2, "braza", func(status int, body []byte) error {
-		logger.Warn("braza.non_200",
-			zap.Int("status", status),
-			zap.String("body", string(body)))
+	exec := httpclient.New(rateMgr, httpClient, 2, "braza", func(status int, body []byte) error {
+		slog.Warn("braza.non_200",
+			"status", status,
+			"body", string(body))
 		return fmt.Errorf("braza returned %d", status)
 	})
 	return &Client{
-		logger:  logger,
 		baseURL: baseURL,
 		token:   token,
 		exec:    exec,

@@ -2,14 +2,14 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
 
-	"github.com/Checker-Finance/adapters/rio-adapter/internal/rio"
 	"github.com/Checker-Finance/adapters/internal/store"
 	"github.com/Checker-Finance/adapters/pkg/model"
+	"github.com/Checker-Finance/adapters/rio-adapter/internal/rio"
 )
 
 // OrderResolverService defines the interface for fetching and mapping order data.
@@ -26,7 +26,6 @@ type TradeSync interface {
 // OrderResolveHandler resolves order status by quoteId, fetches live
 // status from Rio, and syncs the result to the legacy database.
 type OrderResolveHandler struct {
-	Logger    *zap.Logger
 	Service   OrderResolverService
 	Store     store.Store
 	TradeSync TradeSync
@@ -64,10 +63,10 @@ func (h *OrderResolveHandler) ResolveOrder(c *fiber.Ctx) error {
 	// 3. Fetch live status from Rio (no credential resolution needed; API key auth)
 	orderResp, err := h.Service.FetchTradeStatus(ctx, qrec.ClientID, qrec.ProviderOrderID)
 	if err != nil {
-		h.Logger.Error("failed to fetch order status from Rio",
-			zap.String("quote_id", quoteID),
-			zap.String("provider_order_id", qrec.ProviderOrderID),
-			zap.Error(err))
+		slog.Error("failed to fetch order status from Rio",
+			"quote_id", quoteID,
+			"provider_order_id", qrec.ProviderOrderID,
+			"error", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch status from Rio"})
 	}
 

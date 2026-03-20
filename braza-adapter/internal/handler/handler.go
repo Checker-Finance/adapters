@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"go.uber.org/zap"
 
 	_ "github.com/Checker-Finance/adapters/braza-adapter/internal/auth"
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/braza"
@@ -19,7 +19,6 @@ import (
 // and delegates processing to the Braza service layer.
 type Handler struct {
 	ctx      context.Context
-	logger   *zap.Logger
 	nc       *nats.Conn
 	service  *braza.Service
 	subjects []string // NATS subjects to subscribe to
@@ -28,13 +27,11 @@ type Handler struct {
 // NewHandler constructs a new Handler with its dependencies.
 func NewHandler(
 	ctx context.Context,
-	logger *zap.Logger,
 	nc *nats.Conn,
 	service *braza.Service,
 ) *Handler {
 	return &Handler{
 		ctx:     ctx,
-		logger:  logger,
 		nc:      nc,
 		service: service,
 		subjects: []string{
@@ -50,7 +47,7 @@ func (h *Handler) Start() error {
 		if _, err := h.nc.QueueSubscribe(subj, "braza-adapter-workers", h.handleMessage); err != nil {
 			return fmt.Errorf("subscribe %s: %w", subj, err)
 		}
-		h.logger.Info("subscribed to NATS subject", zap.String("subject", subj))
+		slog.Info("subscribed to NATS subject", "subject", subj)
 	}
 	return nil
 }
@@ -61,7 +58,7 @@ func (h *Handler) handleMessage(msg *nats.Msg) {
 
 	var env model.Envelope
 	if err := json.Unmarshal(msg.Data, &env); err != nil {
-		h.logger.Warn("invalid envelope", zap.Error(err))
+		slog.Warn("invalid envelope", "error", err)
 		return
 	}
 
@@ -71,12 +68,12 @@ func (h *Handler) handleMessage(msg *nats.Msg) {
 	case "cmd.lp.trade_execute.v1.BRAZA":
 		h.onTradeExecute(env)
 	default:
-		h.logger.Warn("unknown event type", zap.String("event_type", env.EventType))
+		slog.Warn("unknown event type", "event_type", env.EventType)
 	}
 
-	h.logger.Debug("message handled",
-		zap.String("event_type", env.EventType),
-		zap.Duration("latency", time.Since(start)),
+	slog.Debug("message handled",
+		"event_type", env.EventType,
+		"latency", time.Since(start),
 	)
 }
 
@@ -87,16 +84,16 @@ func (h *Handler) onQuoteRequest(env model.Envelope) {
 
 	var req model.QuoteRequest
 	if err := json.Unmarshal(env.Payload, &req); err != nil {
-		h.logger.Warn("invalid quote request payload", zap.Error(err))
+		slog.Warn("invalid quote request payload", "error", err)
 		h.service.PublishErrorEvent(env, err, "BAD_PAYLOAD", false)
 		return
 	}
 
-	h.logger.Info("processing quote request",
-		zap.String("tenant_id", env.TenantID),
-		zap.String("client_id", env.ClientID),
-		zap.String("instrument", req.Instrument),
-		zap.String("side", req.Side),
+	slog.Info("processing quote request",
+		"tenant_id", env.TenantID,
+		"client_id", env.ClientID,
+		"instrument", req.Instrument,
+		"side", req.Side,
 	)
 
 	if err := h.service.HandleQuoteRequest(ctx, env, req); err != nil {
@@ -111,17 +108,17 @@ func (h *Handler) onTradeExecute(env model.Envelope) {
 
 	var cmd model.TradeCommand
 	if err := json.Unmarshal(env.Payload, &cmd); err != nil {
-		h.logger.Warn("invalid trade execute payload", zap.Error(err))
+		slog.Warn("invalid trade execute payload", "error", err)
 		h.service.PublishErrorEvent(env, err, "BAD_PAYLOAD", false)
 		return
 	}
 
-	h.logger.Info("processing trade execute",
-		zap.String("tenant_id", env.TenantID),
-		zap.String("client_id", env.ClientID),
-		zap.String("instrument", cmd.Instrument),
-		zap.String("side", cmd.Side),
-		zap.Float64("quantity", cmd.Quantity),
+	slog.Info("processing trade execute",
+		"tenant_id", env.TenantID,
+		"client_id", env.ClientID,
+		"instrument", cmd.Instrument,
+		"side", cmd.Side,
+		"quantity", cmd.Quantity,
 	)
 
 	if err := h.service.HandleTradeExecute(ctx, env, cmd); err != nil {

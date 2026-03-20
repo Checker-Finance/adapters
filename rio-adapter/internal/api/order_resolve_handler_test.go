@@ -12,7 +12,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/Checker-Finance/adapters/rio-adapter/internal/rio"
 	"github.com/Checker-Finance/adapters/internal/store"
@@ -103,7 +102,6 @@ func newResolveTestApp(
 ) *fiber.App {
 	app := fiber.New()
 	h := &OrderResolveHandler{
-		Logger:    zap.NewNop(),
 		Service:   svc,
 		Store:     st,
 		TradeSync: ts,

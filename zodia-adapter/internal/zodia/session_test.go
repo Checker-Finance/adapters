@@ -12,7 +12,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 // ─── WebSocket test server helpers ───────────────────────────────────────────
@@ -50,7 +49,7 @@ func makeCombinedServer(t *testing.T, token string, wsHandler func(*websocket.Co
 	srv := httptest.NewServer(mux)
 	wsURL := "ws://" + strings.TrimPrefix(srv.URL, "http://") + "/ws"
 	signer := NewHMACSigner()
-	rc := NewRESTClient(zap.NewNop(), nil, signer)
+	rc := NewRESTClient(nil, signer)
 
 	return &combinedTestServer{srv: srv, wsURL: wsURL, rest: rc}
 }
@@ -77,7 +76,7 @@ func TestSession_Connect_AuthSuccess(t *testing.T) {
 	cs := makeCombinedServer(t, "good-token", authSuccessHandler)
 	defer cs.srv.Close()
 
-	tokenMgr := NewWSTokenManager(zap.NewNop(), cs.rest)
+	tokenMgr := NewWSTokenManager(cs.rest)
 	cfg := &ZodiaClientConfig{
 		APIKey:    "k",
 		APISecret: "s",
@@ -85,9 +84,8 @@ func TestSession_Connect_AuthSuccess(t *testing.T) {
 	}
 	sess := NewSession(
 		SessionConfig{ClientID: "c1", ZodiaCfg: cfg, MaxRetries: 0, RetryDelay: 10 * time.Millisecond},
-		NewWSClient(zap.NewNop()),
+		NewWSClient(),
 		tokenMgr,
-		zap.NewNop(),
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -105,13 +103,12 @@ func TestSession_Connect_AuthFailure(t *testing.T) {
 	})
 	defer cs.srv.Close()
 
-	tokenMgr := NewWSTokenManager(zap.NewNop(), cs.rest)
+	tokenMgr := NewWSTokenManager(cs.rest)
 	cfg := &ZodiaClientConfig{APIKey: "k", APISecret: "s", BaseURL: cs.srv.URL}
 	sess := NewSession(
-		SessionConfig{ClientID: "c-bad", ZodiaCfg: cfg, MaxRetries: 0, RetryDelay: 10 * time.Millisecond},
-		NewWSClient(zap.NewNop()),
+		SessionConfig{ClientID: "c1", ZodiaCfg: cfg, MaxRetries: 0, RetryDelay: 10 * time.Millisecond},
+		NewWSClient(),
 		tokenMgr,
-		zap.NewNop(),
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -163,13 +160,12 @@ func TestSession_RequestPrice_Success(t *testing.T) {
 	})
 	defer cs.srv.Close()
 
-	tokenMgr := NewWSTokenManager(zap.NewNop(), cs.rest)
+	tokenMgr := NewWSTokenManager(cs.rest)
 	cfg := &ZodiaClientConfig{APIKey: "k", APISecret: "s", BaseURL: cs.srv.URL}
 	sess := NewSession(
-		SessionConfig{ClientID: "c2", ZodiaCfg: cfg, MaxRetries: 0, RetryDelay: 0},
-		NewWSClient(zap.NewNop()),
+		SessionConfig{ClientID: "c1", ZodiaCfg: cfg, MaxRetries: 0, RetryDelay: 10 * time.Millisecond},
+		NewWSClient(),
 		tokenMgr,
-		zap.NewNop(),
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -186,7 +182,6 @@ func TestSession_RequestPrice_Success(t *testing.T) {
 func TestSession_RequestPrice_NotConnected(t *testing.T) {
 	sess := &Session{
 		cfg:    SessionConfig{ClientID: "not-connected"},
-		logger: zap.NewNop(),
 	}
 	// connected = false (zero value)
 	_, err := sess.RequestPrice(context.Background(), "USD.MXN", "BUY", 100_000)
@@ -197,7 +192,6 @@ func TestSession_RequestPrice_NotConnected(t *testing.T) {
 func TestSession_ExecuteOrder_NotConnected(t *testing.T) {
 	sess := &Session{
 		cfg:    SessionConfig{ClientID: "not-connected"},
-		logger: zap.NewNop(),
 	}
 	_, err := sess.ExecuteOrder(context.Background(), "quote-id")
 	assert.Error(t, err)
@@ -207,7 +201,7 @@ func TestSession_ExecuteOrder_NotConnected(t *testing.T) {
 // ─── Session.Close ────────────────────────────────────────────────────────────
 
 func TestSession_Close_Idempotent(t *testing.T) {
-	sess := &Session{cfg: SessionConfig{ClientID: "c"}, logger: zap.NewNop()}
+	sess := &Session{cfg: SessionConfig{ClientID: "c"}}
 	assert.NotPanics(t, func() {
 		sess.Close()
 		sess.Close()
@@ -217,7 +211,7 @@ func TestSession_Close_Idempotent(t *testing.T) {
 // ─── Session.dispatch ─────────────────────────────────────────────────────────
 
 func TestSession_dispatch_PriceUpdate(t *testing.T) {
-	sess := &Session{cfg: SessionConfig{ClientID: "c"}, logger: zap.NewNop()}
+	sess := &Session{cfg: SessionConfig{ClientID: "c"}}
 	ch := make(chan priceResult, 1)
 	sess.pendingPrices.Store("ref-abc", ch)
 
@@ -239,7 +233,7 @@ func TestSession_dispatch_PriceUpdate(t *testing.T) {
 }
 
 func TestSession_dispatch_OrderConfirmation(t *testing.T) {
-	sess := &Session{cfg: SessionConfig{ClientID: "c"}, logger: zap.NewNop()}
+	sess := &Session{cfg: SessionConfig{ClientID: "c"}}
 	ch := make(chan orderResult, 1)
 	sess.pendingOrders.Store("ref-exec", ch)
 
@@ -261,7 +255,7 @@ func TestSession_dispatch_OrderConfirmation(t *testing.T) {
 }
 
 func TestSession_dispatch_ErrorWithClientRef(t *testing.T) {
-	sess := &Session{cfg: SessionConfig{ClientID: "c"}, logger: zap.NewNop()}
+	sess := &Session{cfg: SessionConfig{ClientID: "c"}}
 	ch := make(chan priceResult, 1)
 	sess.pendingPrices.Store("ref-err", ch)
 
@@ -282,7 +276,7 @@ func TestSession_dispatch_ErrorWithClientRef(t *testing.T) {
 }
 
 func TestSession_dispatch_UnknownAction(t *testing.T) {
-	sess := &Session{cfg: SessionConfig{ClientID: "c"}, logger: zap.NewNop()}
+	sess := &Session{cfg: SessionConfig{ClientID: "c"}}
 	// Should not panic
 	assert.NotPanics(t, func() {
 		raw, _ := json.Marshal(WSMessage{Action: "heartbeat"})
@@ -296,8 +290,8 @@ func TestSessionManager_GetOrCreate_SameInstance(t *testing.T) {
 	cs := makeCombinedServer(t, "tok", authSuccessHandler)
 	defer cs.srv.Close()
 
-	tokenMgr := NewWSTokenManager(zap.NewNop(), cs.rest)
-	mgr := NewSessionManager(zap.NewNop(), NewWSClient(zap.NewNop()), tokenMgr, 0)
+	tokenMgr := NewWSTokenManager(cs.rest)
+	mgr := NewSessionManager(NewWSClient(), tokenMgr, 0)
 	cfg := &ZodiaClientConfig{APIKey: "k", APISecret: "s", BaseURL: cs.srv.URL}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -316,8 +310,8 @@ func TestSessionManager_Close(t *testing.T) {
 	cs := makeCombinedServer(t, "tok", authSuccessHandler)
 	defer cs.srv.Close()
 
-	tokenMgr := NewWSTokenManager(zap.NewNop(), cs.rest)
-	mgr := NewSessionManager(zap.NewNop(), NewWSClient(zap.NewNop()), tokenMgr, 0)
+	tokenMgr := NewWSTokenManager(cs.rest)
+	mgr := NewSessionManager(NewWSClient(), tokenMgr, 0)
 	cfg := &ZodiaClientConfig{APIKey: "k", APISecret: "s", BaseURL: cs.srv.URL}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -343,8 +337,8 @@ func TestSessionManager_CloseAll(t *testing.T) {
 	})
 	defer cs.srv.Close()
 
-	tokenMgr := NewWSTokenManager(zap.NewNop(), cs.rest)
-	mgr := NewSessionManager(zap.NewNop(), NewWSClient(zap.NewNop()), tokenMgr, 0)
+	tokenMgr := NewWSTokenManager(cs.rest)
+	mgr := NewSessionManager(NewWSClient(), tokenMgr, 0)
 	cfg := &ZodiaClientConfig{APIKey: "k", APISecret: "s", BaseURL: cs.srv.URL}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
