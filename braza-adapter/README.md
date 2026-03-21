@@ -1,181 +1,99 @@
 # Checker — Braza Adapter
 
-The **Braza Adapter** is a Go-based microservice that integrates the Checker trading platform with the **Braza Bank FXCore API**.
-It fetches balances, retrieves product metadata, creates and executes quotes, and normalizes data into Checker's canonical event formats.
-This service runs as part of the low-latency trading stack, communicating with Redis, Postgres, and NATS JetStream.
+The **Braza Adapter** integrates the Checker trading platform with the **Braza Bank FXCore API**.
+It creates and executes quotes, polls trade status, fetches balances, and publishes canonical trade events to NATS JetStream.
 
----
-
-## Features
-
-- **Balance Polling:** Periodically queries Braza `/balance` and publishes normalized balance updates.
-- **Quote Lifecycle:**
-    - Create a quote (preview quotation).
-    - Execute a quote (execute-order).
-    - Poll trade status until completion.
-- **Product Sync:** Retrieves `/product/list` and persists available instrument products to Postgres.
-- **Canonical Mapping:** Translates Braza's payloads into Checker's canonical domain models.
-- **Fiber REST API:** Exposes internal endpoints for integration testing and manual operations.
-- **Prometheus Metrics:** `/metrics` endpoint exposes runtime metrics.
-- **Health Check:** `/health` endpoint returns `"ok"` for probes.
-
----
-
-## Architecture Overview
+## Architecture
 
 ```
-+---------------------+
-|   Checker Core      |
-| (Quote/Trade Svc)   |
-+----------+----------+
-           |
-           | NATS (evt.balance.updated.v1, evt.quote.created.v1)
-           v
-+----------------------------+
-|        Braza Adapter       |
-|  - Poller (balances)       |
-|  - Product Sync            |
-|  - REST API (Fiber)        |
-|  - Publisher (NATS JS)     |
-|  - Mapper (Braza→Canonical)|
-+------------+---------------+
-             |
-             v
-  Braza Sandbox / FXCore API
+Checker Core ──NATS──▶ Braza Adapter ──HTTP──▶ Braza FXCore API
+                             │
+                        NATS JetStream (evt.trade.*.v1.BRAZA)
+                             │
+                        Redis + Postgres
 ```
 
----
+**Status tracking:** Polling only (no webhook support). Default poll interval: 5 minutes.
 
-## Configuration
-
-### Environment Variables
-
-| Name | Description | Default |
-|------|--------------|----------|
-| `BRAZA_BASE_URL` | Braza API base URL | `https://sandbox.fxcore.brazabank.com.br:8443` |
-| `LOG_LEVEL` | Logging level (`debug`, `info`, `warn`, `error`) | `info` |
-| `POLL_INTERVAL_SEC` | Interval (seconds) for balance polling | `30` |
-| `NATS_URL` | NATS JetStream connection URL | `nats://nats:4222` |
-| `POSTGRES_DSN` | Postgres DSN string | *(required)* |
-| `AWS_REGION` | Region for Secrets Manager | `us-east-1` |
-| `PROM_ADDR` | Prometheus metrics endpoint | `:9090` |
-
----
-
-## Local Development
-
-### 1. Clone & Build
-
-```bash
-git clone https://github.com/Checker-Finance/adapters.git
-cd adapters/braza-adapter
-make build
-```
-
-### 2. Run Locally with Docker Compose
-
-```bash
-make up
-make run
-```
-
-This starts NATS, Postgres, and Redis.
-
----
-
-## REST API
+## HTTP Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/health` | Health check (`ok`) |
+| `GET` | `/health` | Health check — reports NATS + store status |
 | `GET` | `/metrics` | Prometheus metrics |
-| `GET` | `/api/v1/balances/:client_id` | Retrieve balances from DB |
-| `POST` | `/api/v1/quote` | Create quote (Braza preview) |
-| `POST` | `/api/v1/quote/:id/execute` | Execute quote |
-| `GET` | `/api/v1/products` | List Braza products |
+| `GET` | `/api/v1/products` | List available products |
+| `GET` | `/api/v1/balances/:client_id` | Client balances |
+| `POST` | `/api/v1/quotes` | Create RFQ |
+| `POST` | `/api/v1/orders` | Execute order |
+| `POST` | `/api/v1/resolve-order/:quoteId` | Resolve/finalize order |
 
----
+## NATS Subjects
+
+| Direction | Subject |
+|-----------|---------|
+| Inbound (quote request) | `cmd.lp.quote_request.v1.BRAZA` |
+| Outbound (interim) | `evt.trade.status_changed.v1.BRAZA` |
+| Outbound (final) | `evt.trade.filled.v1.BRAZA` |
+| Outbound (final) | `evt.trade.rejected.v1.BRAZA` |
+| Outbound (final) | `evt.trade.cancelled.v1.BRAZA` |
+| Outbound (final) | `evt.trade.refunded.v1.BRAZA` |
+
+## Configuration
+
+Service-level infrastructure config is loaded from env vars, then overlaid from the AWS Secrets Manager secret at `{ENV}/braza-adapter`.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENV` | `dev` | Deployment environment (`dev`, `uat`, `prod`) |
+| `DATABASE_URL` | postgres://checker:checker@localhost/db_checker | Postgres DSN |
+| `NATS_URL` | `nats://localhost:4222` | NATS JetStream URL |
+| `REDIS_URL` | `redis://localhost:6379` | Redis URL |
+| `AWS_REGION` | `us-east-2` | AWS region for Secrets Manager |
+| `BRAZA_PORT` | `9020` | HTTP server port |
+| `LOG_LEVEL` | `info` | Log level (`debug`, `info`, `warn`, `error`) |
+| `POLL_INTERVAL` | `5m` | Order status polling interval |
+| `CACHE_TTL` | `24h` | Per-client secret cache TTL |
+| `CLIENT_BALANCES_IDS` | _(empty)_ | Comma-separated client IDs for balance polling |
+| `SETTLEMENT_CUT_OFF` | `17:00` | Settlement cut-off time (local) |
+
+**Per-client secrets** are resolved from AWS Secrets Manager at `{env}/{clientId}/braza` and contain:
+`api_key`, `base_url`, `webhook_secret` (and optionally `webhook_sig_header`).
+
+## Local Development
+
+```bash
+make up       # Start NATS + Redis via Docker Compose
+make build    # Compile binary to ./bin/braza-adapter
+make run      # Run locally
+make test     # Run all tests with race detector
+make lint     # Run golangci-lint
+```
 
 ## Docker
 
-### Build
 ```bash
-docker build -t checker/braza-adapter:latest .
-```
+# Build (from repo root as build context)
+make docker-build
 
-### Run
-```bash
+# Run
 docker run -d \
-  -e BRAZA_BASE_URL=https://sandbox.fxcore.brazabank.com.br:8443 \
-  -e POSTGRES_DSN=postgres://user:pass@host:5432/checker \
-  -e NATS_URL=nats://nats:4222 \
-  -p 8080:8080 \
+  -e ENV=dev \
+  -e AWS_REGION=us-east-2 \
+  -p 9020:9020 \
   checker/braza-adapter:latest
 ```
 
----
-
-## Metrics
-
-Prometheus endpoint at `/metrics` exposes:
-
-- `braza_api_requests_total`
-- `nats_messages_total`
-- `adapter_errors_total`
-- `adapter_last_poll_timestamp`
-
----
-
-## Design Notes
-
-- **Canonical First:** Canonical models (`model.Quote`, `model.Trade`, etc.) are the source of truth.
-- **Mapper Layer:** Handles translation between Braza and Checker schema.
-- **Expiry Logic:** The adapter enforces quote TTL only for execution validation, not event emission.
-- **Error Propagation:** Upstream errors from Braza are logged and passed through HTTP responses.
-
----
-
-## Healthcheck Example
-
-```bash
-curl -s http://localhost:8080/health
-# ok
-```
-
----
-
-## Makefile Commands
-
-| Command | Description |
-|----------|--------------|
-| `make build` | Compile binary |
-| `make run` | Run locally |
-| `make lint` | Run linter |
-| `make test` | Run tests |
-| `make docker-build` | Build Docker image |
-
----
-
-## CI
-
-- Workflow: `.github/workflows/build-and-push-braza-adapter.yml` (on push to `main` under `braza-adapter/**`).
-- Set GitHub secret **`ECR_REPOSITORY_BRAZA`** (e.g. `braza-adapter`) and ensure the ECR repository exists. The same OIDC role (`AWS_ROLE_ARN`) is used as for rio-adapter.
-
----
+At runtime only `ENV` and `AWS_REGION` are required — all infrastructure URLs are fetched from AWS Secrets Manager at `{env}/braza-adapter`.
 
 ## Kubernetes / ArgoCD
 
-- **Paths:** `braza-adapter/k8s/overlays/dev`, `braza-adapter/k8s/overlays/prod`.
-- **Namespaces:** `braza-adapter-dev`, `braza-adapter-prod`.
-- **Secrets:** ExternalSecrets expect AWS Secrets Manager keys:
-  - `braza-adapter/dev` and `braza-adapter/prod` with at least: `DATABASE_URL`, `BRAZA_API_KEY`, `REDIS_PASS`.
+- Overlays: `braza-adapter/k8s/overlays/dev`, `braza-adapter/k8s/overlays/prod`
+- Secrets injected via External Secrets Operator from `prod/braza-adapter` / `dev/braza-adapter` in AWS Secrets Manager
+
+## CI
+
+Workflow: `.github/workflows/build-and-push-braza-adapter.yml` — triggered on push to `main` under `braza-adapter/**`, `pkg/**`, `internal/**`.
 
 ---
 
-## License
-
 © 2025 **Checker Corp** — Proprietary and Confidential.
-
-All rights reserved. Redistribution prohibited without written consent.
-
-See [LICENSE](LICENSE) and [NOTICE](NOTICE) files for details.

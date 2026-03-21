@@ -250,12 +250,7 @@ func NormalizeCapaStatus(status string) string {
 
 // IsTerminalCapaStatus returns true if the raw Capa status represents a final state.
 func IsTerminalCapaStatus(status string) bool {
-	switch NormalizeCapaStatus(status) {
-	case "filled", "cancelled", "rejected":
-		return true
-	default:
-		return false
-	}
+	return model.IsTerminal(NormalizeCapaStatus(status))
 }
 
 // IsTerminalStatus is an alias kept for consistency with XFX adapter naming.

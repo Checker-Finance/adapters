@@ -162,10 +162,5 @@ func NormalizeXFXStatus(status string) string {
 
 // IsTerminalStatus returns true if the status represents a final state.
 func IsTerminalStatus(status string) bool {
-	switch NormalizeXFXStatus(status) {
-	case "filled", "cancelled", "rejected":
-		return true
-	default:
-		return false
-	}
+	return model.IsTerminal(NormalizeXFXStatus(status))
 }

@@ -2,9 +2,6 @@ package rio
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"log/slog"
 	"strings"
 	"time"
@@ -14,6 +11,7 @@ import (
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/internal/store"
+	"github.com/Checker-Finance/adapters/internal/webhooks"
 )
 
 // WebhookHandler handles incoming webhook events from Rio.
@@ -69,7 +67,7 @@ func (h *WebhookHandler) HandleOrderWebhook(c *fiber.Ctx) error {
 			if clientCfg, err := h.resolver.Resolve(c.UserContext(), clientID); err == nil && clientCfg.WebhookSecret != "" {
 				sigHeader := clientCfg.WebhookSigHeader
 				signature := c.Get(sigHeader)
-				if signature == "" || !validateWebhookSignature(clientCfg.WebhookSecret, signature, c.Body()) {
+				if signature == "" || !webhooks.ValidateHMACSHA256(clientCfg.WebhookSecret, signature, c.Body()) {
 					slog.Warn("rio.webhook.invalid_signature",
 						"client", clientID,
 						"header", sigHeader)
@@ -126,20 +124,6 @@ func (h *WebhookHandler) HandleOrderWebhook(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusOK)
 }
 
-func validateWebhookSignature(secret, signature string, body []byte) bool {
-	normalized := strings.TrimSpace(signature)
-	if strings.HasPrefix(strings.ToLower(normalized), "sha256=") {
-		normalized = normalized[7:]
-	}
-	expected, err := hex.DecodeString(normalized)
-	if err != nil {
-		return false
-	}
-	mac := hmac.New(sha256.New, []byte(secret))
-	_, _ = mac.Write(body)
-	actual := mac.Sum(nil)
-	return hmac.Equal(actual, expected)
-}
 
 // handleTerminalWebhook processes a terminal order status from webhook.
 func (h *WebhookHandler) handleTerminalWebhook(ctx context.Context, order *RioOrderResponse, status string) {

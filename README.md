@@ -9,10 +9,10 @@ All adapters share a single root Go module (`github.com/Checker-Finance/adapters
 | Adapter | Venue | Port | Description |
 |---------|-------|------|-------------|
 | [rio-adapter](./rio-adapter/) | Rio Bank FXCore | 9010 | REST + NATS + Postgres/Redis; webhooks + polling |
-| [braza-adapter](./braza-adapter/) | Braza FX | 9010 | REST + NATS + Postgres/Redis; polling only |
+| [braza-adapter](./braza-adapter/) | Braza FX | 9020 | REST + NATS + Postgres/Redis; polling only |
 | [xfx-adapter](./xfx-adapter/) | XFX Trading | 9030 | REST + NATS + Postgres/Redis; OAuth2/Auth0; polling only |
 | [zodia-adapter](./zodia-adapter/) | Zodia Markets | 9040 | REST + NATS + Postgres/Redis; HMAC; webhooks + polling |
-| [kiiex-adapter](./kiiex-adapter/) | Kiiex/AlphaPoint | 8082 | NATS + AlphaPoint WebSocket; no Postgres/Redis |
+| [kiiex-adapter](./kiiex-adapter/) | Kiiex/AlphaPoint | 9070 | NATS + AlphaPoint WebSocket; no Postgres/Redis |
 | [b2c2-adapter](./b2c2-adapter/) | B2C2 Markets | 9050 | NATS; static token; FOK sync orders; no Postgres/Redis |
 | [capa-adapter](./capa-adapter/) | Capa (LATAM ramp) | 9060 | REST + NATS + Postgres/Redis; static API key; webhooks + polling; cross/on/off-ramp |
 
@@ -24,9 +24,9 @@ For a full breakdown of HTTP endpoints and NATS subjects for each adapter, see [
 adapters/
 ├── go.mod / go.sum          # Single root module
 ├── pkg/                     # Shared public packages
-│   ├── model/               # Canonical domain models
+│   ├── model/               # Canonical domain models + status constants (IsTerminal)
 │   ├── secrets/             # Generic TTL cache + AWS Secrets Manager provider
-│   ├── logger/              # Structured zap logger
+│   ├── logger/              # Structured slog logger
 │   └── utils/               # DSN masking, etc.
 ├── internal/                # Shared internal packages
 │   ├── store/               # Hybrid Redis-first, Postgres-backed persistence
@@ -35,6 +35,8 @@ adapters/
 │   ├── rate/                # Rate limiter for venue API calls
 │   ├── metrics/             # Shared Prometheus metrics
 │   ├── secrets/             # Generic AWSResolver[T any]
+│   ├── nats/                # Shared NATS command consumer (XFX, Zodia, Capa)
+│   ├── webhooks/            # Shared HMAC-SHA256 webhook signature validation
 │   └── jobs/                # Background jobs (summary refresher)
 ├── rio-adapter/
 ├── braza-adapter/

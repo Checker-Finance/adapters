@@ -74,5 +74,5 @@ func (p *AWSSecretsManagerProvider) ListSecrets(ctx context.Context, prefix stri
 }
 
 func LoadAWSConfig(region string) (aws.Config, error) {
-	return config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	return config.LoadDefaultConfig(context.Background(), config.WithRegion(region))
 }

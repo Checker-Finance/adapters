@@ -9,6 +9,7 @@ import (
 
 	"github.com/Checker-Finance/adapters/braza-adapter/pkg/config"
 	"github.com/Checker-Finance/adapters/internal/legacy"
+	"github.com/Checker-Finance/adapters/pkg/model"
 
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/auth"
 	"github.com/Checker-Finance/adapters/braza-adapter/internal/secrets"
@@ -265,13 +266,7 @@ func (p *Poller) PollTradeStatus(
 	}()
 }
 
-// isTerminalStatus encapsulates what we consider a final / non-pollable state.
-// These should be the *normalized* statuses returned by NormalizeOrderStatus.
+// isTerminalStatus reports whether the normalized Braza status is a final state.
 func isTerminalStatus(status string) bool {
-	switch status {
-	case "COMPLETED", "FAILED", "CANCELED", "CANCELLED", "FILLED", "REJECTED":
-		return true
-	default:
-		return false
-	}
+	return model.IsTerminal(status)
 }

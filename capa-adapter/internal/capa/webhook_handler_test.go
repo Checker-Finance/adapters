@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/Checker-Finance/adapters/internal/webhooks"
 )
 
 func TestValidateWebhookSignature(t *testing.T) {
@@ -56,9 +57,9 @@ func TestValidateWebhookSignature(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := validateWebhookSignature(tt.secret, tt.signature, tt.body)
+			got := webhooks.ValidateHMACSHA256(tt.secret, tt.signature, tt.body)
 			if got != tt.want {
-				t.Errorf("validateWebhookSignature() = %v, want %v", got, tt.want)
+				t.Errorf("ValidateHMACSHA256() = %v, want %v", got, tt.want)
 			}
 		})
 	}

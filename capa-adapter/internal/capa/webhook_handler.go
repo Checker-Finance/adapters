@@ -2,16 +2,13 @@ package capa
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/Checker-Finance/adapters/internal/legacy"
 	"github.com/Checker-Finance/adapters/internal/publisher"
 	"github.com/Checker-Finance/adapters/internal/store"
+	"github.com/Checker-Finance/adapters/internal/webhooks"
 )
 
 // WebhookHandler handles incoming webhook events from Capa.
@@ -49,7 +46,7 @@ func (h *WebhookHandler) ProcessWebhookEvent(ctx context.Context, clientID strin
 	// Validate HMAC-SHA256 signature using the per-client webhook secret.
 	if h.resolver != nil && clientID != "" {
 		if clientCfg, err := h.resolver.Resolve(ctx, clientID); err == nil && clientCfg.WebhookSecret != "" {
-			if signature == "" || !validateWebhookSignature(clientCfg.WebhookSecret, signature, body) {
+			if signature == "" || !webhooks.ValidateHMACSHA256(clientCfg.WebhookSecret, signature, body) {
 				slog.Warn("capa.webhook.invalid_signature",
 					"client", clientID)
 				return ErrInvalidSignature
@@ -108,21 +105,6 @@ type errInvalidSignature string
 
 func (e errInvalidSignature) Error() string { return string(e) }
 
-// validateWebhookSignature validates the HMAC-SHA256 signature of a webhook payload.
-func validateWebhookSignature(secret, signature string, body []byte) bool {
-	normalized := strings.TrimSpace(signature)
-	if strings.HasPrefix(strings.ToLower(normalized), "sha256=") {
-		normalized = normalized[7:]
-	}
-	expected, err := hex.DecodeString(normalized)
-	if err != nil {
-		return false
-	}
-	mac := hmac.New(sha256.New, []byte(secret))
-	_, _ = mac.Write(body)
-	actual := mac.Sum(nil)
-	return hmac.Equal(actual, expected)
-}
 
 // handleTerminalWebhook processes a terminal transaction status from webhook.
 func (h *WebhookHandler) handleTerminalWebhook(

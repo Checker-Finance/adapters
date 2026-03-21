@@ -288,13 +288,7 @@ func NormalizeRioStatus(status string) string {
 
 // IsTerminalStatus returns true if the status represents a final state.
 func IsTerminalStatus(status string) bool {
-	normalized := NormalizeRioStatus(status)
-	switch normalized {
-	case "filled", "cancelled", "rejected", "refunded":
-		return true
-	default:
-		return false
-	}
+	return model.IsTerminal(NormalizeRioStatus(status))
 }
 
 //

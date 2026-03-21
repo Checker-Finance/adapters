@@ -49,7 +49,7 @@ Complete reference for all adapters in this monorepo: HTTP endpoints, NATS subje
 
 ## Braza
 
-**Port:** `9010` (`BRAZA_PORT`)
+**Port:** `9020` (`BRAZA_PORT`)
 **Auth:** API key per client — resolved from AWS Secrets Manager at `{env}/{clientId}/braza`
 **Status tracking:** Polling only (`POLL_INTERVAL`, default 5m)
 
@@ -143,7 +143,7 @@ Complete reference for all adapters in this monorepo: HTTP endpoints, NATS subje
 
 ## Kiiex
 
-**Port:** `8082` (`SERVER_PORT`)
+**Port:** `9070` (`SERVER_PORT`)
 **Auth:** HMAC (AlphaPoint/Kiiex WebSocket session) — per-client secrets from AWS Secrets Manager at `{env}/{clientId}/kiiex`
 **Transport:** AlphaPoint WebSocket — no REST polling, no webhooks
 **Note:** Minimal HTTP surface; quote creation happens entirely via NATS → WebSocket
@@ -238,11 +238,10 @@ Complete reference for all adapters in this monorepo: HTTP endpoints, NATS subje
 | Adapter | Port | Webhooks | Products source | Status tracking | Auth model |
 |---------|------|----------|-----------------|-----------------|------------|
 | Rio | 9010 | Yes | Dynamic | Webhook + poll | API key |
-| Braza | 9010* | No | Dynamic | Poll only | API key |
+| Braza | 9020 | No | Dynamic | Poll only | API key |
 | XFX | 9030 | No | Static (hardcoded) | Poll only | OAuth2 / Auth0 |
 | Zodia | 9040 | Yes | Dynamic | Webhook + poll | HMAC |
-| Kiiex | 8082 | No | — | WS events | HMAC (AlphaPoint) |
+| Kiiex | 9070 | No | — | WS events | HMAC (AlphaPoint) |
 | B2C2 | 9050 | No | Dynamic (B2C2 API) | Sync (FOK) | Static token |
 | Capa | 9060 | Yes | Static (hardcoded) | Webhook + poll | Static API key |
 
-\* Braza shares the same default port as Rio but is configured separately via `BRAZA_PORT`.

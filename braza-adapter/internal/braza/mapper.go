@@ -181,20 +181,19 @@ func (m *Mapper) ToAPIQuoteResponse(q model.Quote) map[string]any {
 }
 
 func NormalizeOrderStatus(status string) string {
-	switch strings.ToLower(strings.TrimSpace(status)) {
+	s := strings.ToLower(strings.TrimSpace(status))
+	switch s {
 	case "processing", "processando":
 		return "submitted"
-	case "finalizado", "completed", "complete", "executado":
+	case "finalizado", "completed", "complete", "executado", "filled":
 		return "filled"
-	case "rejeitado", "rejected":
-		return "Rejected"
+	case "rejeitado", "rejected", "failed", "erro", "error":
+		return "rejected"
 	case "cancelado", "cancelled", "canceled":
 		return "cancelled"
-	case "erro", "error":
-		return "error"
 	case "pendente", "pending":
 		return "pending"
 	default:
-		return status // pass through unknown values
+		return s
 	}
 }

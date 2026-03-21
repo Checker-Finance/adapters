@@ -12,6 +12,7 @@ All adapters share a single root Go module (`github.com/Checker-Finance/adapters
 adapters/                    # Root module (go.mod here)
 ├── pkg/                     # Shared libraries (canonical models, secrets, logger, utils)
 │   ├── model/               # Canonical domain models (Quote, Trade, Settlement, etc.)
+│   │                        #   + status constants (StatusFilled etc.) + IsTerminal()
 │   ├── secrets/             # Generic TTL cache + AWS Secrets Manager provider
 │   ├── logger/              # Structured logging (slog)
 │   └── utils/               # Utilities (DSN masking, etc.)
@@ -22,15 +23,21 @@ adapters/                    # Root module (go.mod here)
 │   ├── rate/                # Rate limiter for venue API calls
 │   ├── metrics/             # Shared Prometheus metrics
 │   ├── secrets/             # Generic AWSResolver[T any] for multi-tenant config
+│   ├── nats/                # Shared NATS command consumer (used by XFX, Zodia, Capa)
+│   ├── webhooks/            # Shared HMAC-SHA256 webhook signature validation
 │   └── jobs/                # Background jobs (summary refresher)
 ├── rio-adapter/             # Rio Bank FXCore integration (Fiber + NATS + Postgres/Redis)
 ├── braza-adapter/           # Braza FX integration (Fiber + NATS + Postgres/Redis)
-├── kiiex-adapter/           # Kiiex/AlphaPoint integration (WebSocket + NATS)
 ├── xfx-adapter/             # XFX Trading API integration (Fiber + NATS + Postgres/Redis)
+├── zodia-adapter/           # Zodia Markets integration (Fiber + NATS + Postgres/Redis)
+├── capa-adapter/            # Capa ramp integration (Fiber + NATS + Postgres/Redis)
+├── b2c2-adapter/            # B2C2 Markets integration (NATS only; FOK sync orders)
+├── kiiex-adapter/           # Kiiex/AlphaPoint integration (NATS + AlphaPoint WebSocket)
+├── docs/                    # Reference documentation (adapters.md)
 └── scripts/                 # OIDC AWS setup scripts
 ```
 
-Each adapter directory has its own `Makefile` and `Dockerfile`. Rio and Braza also have `k8s/` and `pkg/config/`. Kiiex has `configs/` (symbol mapping JSON) and `pkg/eventbus/` instead.
+Each adapter directory has its own `Makefile` and `Dockerfile`. Rio, Braza, XFX, Zodia, and Capa have `k8s/` and `pkg/config/`. Kiiex has `configs/` (symbol mapping JSON) and `pkg/eventbus/` instead.
 Docker images are built from the repo root as build context.
 
 ## Common Commands
@@ -73,7 +80,7 @@ go test -v -tags integration -run TestName ./...
 
 ### Adapter Pattern
 
-Rio and Braza follow this layered structure:
+Rio, Braza, XFX, Zodia, and Capa follow this layered structure (Fiber + NATS + Postgres/Redis):
 
 ```
 <adapter>/
@@ -84,6 +91,7 @@ Rio and Braza follow this layered structure:
       client.go          # HTTP client for venue API with rate limiting
       poller.go          # Scheduled polling for order status (fallback if webhooks fail)
       webhook_handler.go # Real-time order update callbacks (signature-validated)
+      command_consumer.go # Thin wrapper around internal/nats.CommandConsumer
     api/                 # Fiber REST endpoints (handlers, routes, middleware)
     auth/                # Venue-specific auth (JWT management, token caching)
     secrets/             # Thin wrapper around internal/secrets.AWSResolver[T]
@@ -94,28 +102,9 @@ Rio and Braza follow this layered structure:
   k8s/                   # Kustomize base + dev/prod overlays
 ```
 
-XFX follows the rio/braza shape (Fiber + NATS + Postgres/Redis) but uses OAuth2 Client Credentials (Auth0) instead of per-request API keys, and polling-only (no webhook support):
-
-```
-xfx-adapter/
-  cmd/xfx-adapter/main.go    # Entry point: config, auth, DI wiring, graceful shutdown
-  internal/
-    xfx/
-      types.go               # XFX API request/response types and config
-      auth.go                # OAuth2 Client Credentials token manager (Auth0)
-      client.go              # HTTP client wrapping XFX API calls
-      mapper.go              # XFX ↔ canonical model conversions + status normalization
-      service.go             # Business logic: CreateRFQ, ExecuteRFQ, FetchTransactionStatus
-      poller.go              # Transaction status polling (XFX has no webhooks)
-    api/                     # Fiber REST endpoints
-    secrets/                 # AWSResolver[XFXClientConfig] wrapper
-  pkg/config/config.go       # Environment variable config loader
-  Makefile, Dockerfile, k8s/
-```
-
 **XFX-specific notes:**
-- Auth: OAuth2 Client Credentials via Auth0 (`https://dev-er8o7vv4aka08m70.us.auth0.com/oauth/token`), audience `https://api.xfx.io/trading`, tokens cached for 24h with 5-minute refresh buffer
-- Per-client secrets: `{env}/xfx/{clientId}` → `{"client_id": "...", "client_secret": "...", "base_url": "..."}`
+- Auth: OAuth2 Client Credentials via Auth0; `auth0_endpoint` and `auth0_audience` come from the **per-client** secret `{env}/{clientId}/xfx` — no env vars needed for auth configuration
+- Per-client secrets: `{env}/{clientId}/xfx` → `{"client_id", "client_secret", "base_url", "auth0_endpoint", "auth0_audience"}`
 - No webhooks — polling only (default `XFX_POLL_INTERVAL=15s`)
 - NATS subjects: `evt.trade.<status>.v1.XFX`
 - HTTP port: 9030
@@ -128,7 +117,7 @@ xfx-adapter/
 
 **Supported currency pairs:** USD/MXN, USDT/MXN, USDC/MXN, USD/COP, USDT/COP, USDC/COP, USD/USDT, USD/USDC (all min $100,000 USD)
 
-Kiiex follows a different shape (WebSocket + RabbitMQ, no Fiber/NATS/Postgres/Redis):
+Kiiex follows a different shape (NATS + AlphaPoint WebSocket; no Fiber/Postgres/Redis):
 
 ```
 kiiex-adapter/
@@ -137,8 +126,8 @@ kiiex-adapter/
     alphapoint/               # WebSocket client + session for AlphaPoint/Kiiex exchange
     config/                   # Environment variable config loader
     instruments/              # Symbol mapping (loaded from configs/symbol_mapping.json)
+    nats/                     # NATS command consumer + publisher
     order/                    # Order models, commands, events, service, adapters
-    rabbitmq/                 # RabbitMQ consumer (incoming orders) + publisher (outgoing events)
     security/                 # Auth (HMAC signature) + AWS Secrets Manager fetch
     tracking/                 # Trade status service (subscribes to eventbus, publishes results)
   pkg/eventbus/               # In-process pub/sub event bus (kiiex-specific)
@@ -147,33 +136,50 @@ kiiex-adapter/
   Makefile                    # All targets delegate to repo root via `cd ..`
 ```
 
+B2C2 is NATS-only (no Fiber/Postgres/Redis/webhooks), using FOK synchronous orders:
+
+```
+b2c2-adapter/
+  cmd/b2c2-adapter/main.go
+  internal/
+    b2c2/        # Service, client, mapper, types
+    nats/        # Command consumer + publisher
+    secrets/     # AWSResolver[B2C2ClientConfig] wrapper
+  pkg/config/config.go
+```
+
 ### Key Design Patterns
 
 - **Single root module** — `github.com/Checker-Finance/adapters`; shared packages live in `pkg/` and `internal/`
 - **Multi-tenant by design** — every operation keyed by `clientID`
-- **Generic secret resolver** — `internal/secrets.AWSResolver[T any]` resolves per-client config from AWS Secrets Manager; rio and braza wrap it in `<adapter>/internal/secrets/`; kiiex fetches a single named secret directly in `internal/security/secrets.go`
-- **Per-client secrets** (rio/braza) — resolved at `{env}/{clientId}/{venue}`, cached in-memory with TTL
-- **Dual order-status mechanism** (rio/braza) — webhook handler for real-time updates + poller as fallback
-- **Canonical event envelopes** (rio/braza) — all NATS events wrapped with correlation IDs and metadata
-- **Hybrid storage** (rio/braza) — Redis for speed, Postgres for durability; store layer abstracts both
-- **In-process event bus** (kiiex) — `pkg/eventbus` decouples order service from RabbitMQ publisher and trade status tracker
+- **Generic secret resolver** — `internal/secrets.AWSResolver[T any]` resolves per-client config from AWS Secrets Manager; all Fiber+NATS adapters wrap it in `<adapter>/internal/secrets/`
+- **Per-client secrets** — resolved at `{env}/{clientId}/{venue}`, cached in-memory with TTL
+- **Shared NATS command consumer** — `internal/nats.CommandConsumer` handles subscribe → unmarshal → timeout → dispatch; XFX, Zodia, Capa wrap it with a thin `CommandConsumer` struct in their own package
+- **Shared webhook validation** — `internal/webhooks.ValidateHMACSHA256(secret, signature, body)` used by Rio, Zodia, Capa webhook handlers
+- **Canonical status constants** — `pkg/model`: `StatusFilled`, `StatusCancelled`, `StatusRejected`, `StatusPending`, `StatusRefunded` + `IsTerminal(status string) bool`; never redefine per-file
+- **Dual order-status mechanism** (Rio, Zodia, Capa) — webhook handler for real-time updates + poller as fallback
+- **Canonical event envelopes** (Fiber+NATS adapters) — all NATS events wrapped with correlation IDs and metadata
+- **Hybrid storage** (Fiber+NATS adapters) — Redis for speed, Postgres for durability; store layer abstracts both
+- **In-process event bus** (Kiiex) — `pkg/eventbus` decouples order service from NATS publisher and trade status tracker
 - **Dependency injection** via constructor functions; interface-based abstractions for testability
 
-### NATS Event Subjects (Rio)
+### NATS Event Subjects
 
-Published to JetStream with format `evt.trade.<event>.v1.RIO`:
+Published to JetStream with format `evt.trade.<event>.v1.<VENUE>`. Examples:
 - `evt.trade.status_changed.v1.RIO`
 - `evt.trade.filled.v1.RIO`
 - `evt.trade.rejected.v1.RIO`
 - `evt.trade.cancelled.v1.RIO`
 - `evt.trade.refunded.v1.RIO`
 
-### RabbitMQ (Kiiex)
+Each adapter uses its own venue suffix (BRAZA, XFX, ZODIA, CAPA, B2C2, KIIEX).
 
-Kiiex uses RabbitMQ instead of NATS:
-- **Consumer** — reads incoming order commands from a queue keyed by `provider` (e.g. `kiiex`)
-- **Publisher** — publishes trade status events back to RabbitMQ after AlphaPoint order updates
-- In-process flow: RabbitMQ consumer → order service → AlphaPoint WebSocket → eventbus → trade status tracker → RabbitMQ publisher
+### NATS (Kiiex)
+
+Kiiex uses NATS JetStream (migrated from RabbitMQ):
+- **Consumer** (`internal/nats/command_consumer.go`) — subscribes to `cmd.lp.trade_execute.v1.KIIEX` and `cmd.lp.trade_cancel.v1.KIIEX`
+- **Publisher** (`internal/nats/publisher.go`) — subscribes to in-process eventbus, publishes `evt.trade.filled.v1.KIIEX` / `evt.trade.cancelled.v1.KIIEX`
+- In-process flow: NATS consumer → order service → AlphaPoint WebSocket → eventbus → NATS publisher
 
 ## CI/CD
 
@@ -193,7 +199,9 @@ Workflows in `.github/workflows/`:
 New adapters should:
 1. Live under `<name>-adapter/` with the same directory layout as the closest existing adapter
 2. Import shared packages from `github.com/Checker-Finance/adapters/pkg/...` and `github.com/Checker-Finance/adapters/internal/...`
-3. For Fiber + NATS adapters (rio/braza pattern): wrap `internal/secrets.AWSResolver[T]` with a typed facade in `<adapter>/internal/secrets/` and use `internal/legacy.NewTradeSyncWriter(pool, logger, "<adapter-name>")` for trade syncing
-4. For non-NATS adapters (kiiex pattern): implement secrets fetch directly in `internal/security/`; use `pkg/eventbus` for in-process decoupling if needed
-5. Mirror Makefile targets and Dockerfile shape (root build context) from an existing adapter
-6. Add a CI workflow under `.github/workflows/build-and-push-<name>-adapter.yml` with path triggers for `<name>-adapter/**`, `pkg/**`, `internal/**`, `go.mod`, `go.sum`
+3. For Fiber + NATS adapters (rio/braza pattern): wrap `internal/secrets.AWSResolver[T]` with a typed facade in `<adapter>/internal/secrets/` and use `internal/legacy.NewTradeSyncWriter(pool, "<adapter-name>")` for trade syncing
+4. Use `internal/nats.CommandConsumer` for NATS command subscriptions (wrap with a thin local struct)
+5. Use `internal/webhooks.ValidateHMACSHA256` for webhook signature validation
+6. Use `model.IsTerminal(status)` — do not define a local `isTerminalStatus` function
+7. Mirror Makefile targets and Dockerfile shape (root build context) from an existing adapter
+8. Add a CI workflow under `.github/workflows/build-and-push-<name>-adapter.yml` with path triggers for `<name>-adapter/**`, `pkg/**`, `internal/**`, `go.mod`, `go.sum`

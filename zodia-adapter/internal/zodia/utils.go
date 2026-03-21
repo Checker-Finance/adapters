@@ -1,6 +1,10 @@
 package zodia
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/Checker-Finance/adapters/pkg/model"
+)
 
 // NormalizeTransactionState maps Zodia transaction states to canonical status strings.
 // Known Zodia states: "PENDING", "PROCESSED"
@@ -26,12 +30,7 @@ func NormalizeTransactionState(state string) string {
 // IsTerminalState returns true if the Zodia transaction state represents a final state
 // from which no further transitions are expected.
 func IsTerminalState(state string) bool {
-	switch strings.ToUpper(strings.TrimSpace(state)) {
-	case "PROCESSED", "FAILED", "REJECTED", "CANCELLED":
-		return true
-	default:
-		return false
-	}
+	return model.IsTerminal(NormalizeTransactionState(state))
 }
 
 // ToZodiaPair converts a canonical currency pair to Zodia's dot notation.
